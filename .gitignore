@@ -35,3 +35,5 @@ ethercoaster-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Environment variable setter
+setenv.sh
