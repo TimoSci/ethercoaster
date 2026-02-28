@@ -26,6 +26,10 @@ config :ethercoaster, Ethercoaster.Mailer, adapter: Swoosh.Adapters.Test
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 
+# Route Beacon Chain HTTP calls through Req.Test for stubbing
+config :ethercoaster, Ethercoaster.BeaconChain,
+  req_options: [plug: {Req.Test, Ethercoaster.BeaconChain.Client}, retry: false]
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 
