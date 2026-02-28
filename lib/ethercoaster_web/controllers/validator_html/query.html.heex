@@ -1,0 +1,33 @@
+<.header>
+  Validator Rewards Query
+  <:subtitle>Query attestation rewards for a validator over a range of slots.</:subtitle>
+</.header>
+
+<.form for={@form} action={~p"/validator/query"} method="post" class="mt-4 space-y-4">
+  <.input field={@form[:pubkey]} type="text" label="Validator Public Key" placeholder="0x..." />
+  <.input field={@form[:last_n_slots]} type="number" label="Last N Slots" placeholder="3200" min="1" max="100000" />
+  <.button>Query Rewards</.button>
+</.form>
+
+<div :if={@error} class="alert alert-error mt-4">
+  <.icon name="hero-exclamation-circle" class="size-5" />
+  <span>{@error}</span>
+</div>
+
+<div :if={@result} class="mt-6">
+  <.list>
+    <:item title="Public Key"><code class="text-xs break-all">{@result.pubkey}</code></:item>
+    <:item title="Validator Index">{@result.validator_index}</:item>
+    <:item title="Epoch Range">{@result.from_epoch} – {@result.to_epoch} ({@result.epoch_count} epochs)</:item>
+    <:item title="Total Net Reward">{format_gwei(@result.total_reward)} Gwei</:item>
+  </.list>
+
+  <.table id="epoch-rewards" rows={@result.epoch_rewards}>
+    <:col :let={r} label="Epoch">{r.epoch}</:col>
+    <:col :let={r} label="Head">{format_gwei(r.head)}</:col>
+    <:col :let={r} label="Target">{format_gwei(r.target)}</:col>
+    <:col :let={r} label="Source">{format_gwei(r.source)}</:col>
+    <:col :let={r} label="Inactivity">{format_gwei(r.inactivity)}</:col>
+    <:col :let={r} label="Total">{format_gwei(r.total)}</:col>
+  </.table>
+</div>

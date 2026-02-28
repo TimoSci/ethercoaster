@@ -18,6 +18,9 @@ defmodule EthercoasterWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    get "/validator/query", ValidatorController, :query
+    post "/validator/query", ValidatorController, :query
   end
 
   # Other scopes may use custom stacks.
