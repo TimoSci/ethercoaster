@@ -6,6 +6,8 @@ defmodule Ethercoaster.Currency do
     field :name, :string
     field :symbol, :string
 
+    has_many :prices, Ethercoaster.Price
+
     timestamps(type: :utc_datetime)
   end
 

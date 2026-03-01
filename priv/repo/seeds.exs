@@ -9,3 +9,10 @@
 #
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
+
+# Import ESTV price CSV files
+Path.wildcard(Path.join(:code.priv_dir(:ethercoaster), "repo/data/*.csv"))
+|> Enum.each(fn path ->
+  {:ok, count} = Ethercoaster.Prices.import_csv(path)
+  IO.puts("Imported #{count} prices from #{Path.basename(path)}")
+end)
