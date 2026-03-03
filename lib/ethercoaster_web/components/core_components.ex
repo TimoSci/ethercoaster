@@ -349,6 +349,7 @@ defmodule EthercoasterWeb.CoreComponents do
 
   slot :col, required: true do
     attr :label, :string
+    attr :title, :string
   end
 
   slot :action, doc: "the slot for showing user actions in the last table column"
@@ -363,7 +364,7 @@ defmodule EthercoasterWeb.CoreComponents do
     <table class="table table-zebra">
       <thead>
         <tr>
-          <th :for={col <- @col}>{col[:label]}</th>
+          <th :for={col <- @col} title={col[:title]}>{col[:label]}</th>
           <th :if={@action != []}>
             <span class="sr-only">{gettext("Actions")}</span>
           </th>

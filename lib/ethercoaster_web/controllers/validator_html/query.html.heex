@@ -24,9 +24,9 @@
 
   <.table id="epoch-rewards" rows={@result.epoch_rewards}>
     <:col :let={r} label="Epoch">{r.epoch}</:col>
-    <:col :let={r} label="Head">{format_gwei(r.head)}</:col>
-    <:col :let={r} label="Target">{format_gwei(r.target)}</:col>
-    <:col :let={r} label="Source">{format_gwei(r.source)}</:col>
+    <:col :let={r} label="Head" title="Reward for correctly attesting to the head of the chain (most recent block)">{format_gwei(r.head)}</:col>
+    <:col :let={r} label="Target" title="Reward for correctly attesting to the target checkpoint (current epoch boundary block)">{format_gwei(r.target)}</:col>
+    <:col :let={r} label="Source" title="Reward for correctly attesting to the source checkpoint (last justified epoch boundary block)">{format_gwei(r.source)}</:col>
     <:col :let={r} label="Inactivity">{format_gwei(r.inactivity)}</:col>
     <:col :let={r} label="Total">{format_gwei(r.total)}</:col>
   </.table>
