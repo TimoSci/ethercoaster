@@ -63,7 +63,10 @@ config :phoenix, :json_library, Jason
 # Beacon Chain API client
 config :ethercoaster, Ethercoaster.BeaconChain,
   base_url: "http://localhost:5052",
-  receive_timeout: 15_000
+  receive_timeout: 15_000,
+  pool_size: 32,
+  pool_count: 1,
+  max_concurrency: 16
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

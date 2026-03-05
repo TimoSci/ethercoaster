@@ -14,6 +14,12 @@ defmodule Ethercoaster.Validators do
   @max_epochs 100
   @slots_per_epoch 32
 
+  defp max_concurrency do
+    :ethercoaster
+    |> Application.get_env(Ethercoaster.BeaconChain, [])
+    |> Keyword.get(:max_concurrency, 16)
+  end
+
   @type category :: :attestation | :sync_committee | :block_proposal
 
   @doc """
@@ -120,7 +126,7 @@ defmodule Ethercoaster.Validators do
             :error
         end
       end,
-      max_concurrency: 4,
+      max_concurrency: max_concurrency(),
       timeout: 30_000
     )
     |> Enum.flat_map(fn
@@ -167,7 +173,7 @@ defmodule Ethercoaster.Validators do
                   _ -> {:ok, 0}
                 end
               end,
-              max_concurrency: 8,
+              max_concurrency: max_concurrency(),
               timeout: 30_000
             )
             |> Enum.map(fn
@@ -181,7 +187,7 @@ defmodule Ethercoaster.Validators do
             reward: Enum.sum(slot_rewards)
           }
         end,
-        max_concurrency: 4,
+        max_concurrency: max_concurrency(),
         timeout: 60_000
       )
       |> Enum.flat_map(fn
@@ -240,7 +246,7 @@ defmodule Ethercoaster.Validators do
             []
         end
       end,
-      max_concurrency: 4,
+      max_concurrency: max_concurrency(),
       timeout: 30_000
     )
     |> Enum.flat_map(fn

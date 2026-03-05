@@ -11,6 +11,14 @@ defmodule Ethercoaster.Application do
 
     children =
       [
+        {Finch,
+         name: Ethercoaster.Finch,
+         pools: %{
+           :default => [
+             size: Keyword.get(beacon_config, :pool_size, 32),
+             count: Keyword.get(beacon_config, :pool_count, 1)
+           ]
+         }},
         EthercoasterWeb.Telemetry,
         Ethercoaster.Repo,
         {DNSCluster, query: Application.get_env(:ethercoaster, :dns_cluster_query) || :ignore},

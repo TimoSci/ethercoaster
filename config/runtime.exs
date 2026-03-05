@@ -20,7 +20,10 @@ import Config
 config :ethercoaster, Ethercoaster.BeaconChain,
   base_url: System.get_env("BEACON_API_URL", "http://localhost:5052"),
   api_key: System.get_env("BEACON_API_KEY"),
-  receive_timeout: String.to_integer(System.get_env("BEACON_API_TIMEOUT", "15000"))
+  receive_timeout: String.to_integer(System.get_env("BEACON_API_TIMEOUT", "15000")),
+  pool_size: String.to_integer(System.get_env("BEACON_POOL_SIZE", "32")),
+  pool_count: String.to_integer(System.get_env("BEACON_POOL_COUNT", "1")),
+  max_concurrency: String.to_integer(System.get_env("BEACON_MAX_CONCURRENCY", "16"))
 
 if System.get_env("PHX_SERVER") do
   config :ethercoaster, EthercoasterWeb.Endpoint, server: true

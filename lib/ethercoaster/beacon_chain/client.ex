@@ -28,7 +28,7 @@ defmodule Ethercoaster.BeaconChain.Client do
 
     headers = if api_key, do: [{"authorization", "Bearer #{api_key}"}], else: []
 
-    [base_url: base_url, headers: headers, receive_timeout: receive_timeout]
+    [base_url: base_url, headers: headers, receive_timeout: receive_timeout, finch: Ethercoaster.Finch]
     |> Keyword.merge(req_options)
     |> Req.new()
   end
