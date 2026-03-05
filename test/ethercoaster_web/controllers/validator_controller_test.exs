@@ -33,6 +33,12 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
             }
           })
 
+        conn.request_path =~ "/duties/sync/" ->
+          Req.Test.json(conn, %{"data" => []})
+
+        conn.request_path =~ "/duties/proposer/" ->
+          Req.Test.json(conn, %{"data" => []})
+
         true ->
           Req.Test.json(conn, %{"data" => %{}})
       end
@@ -42,54 +48,73 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
   describe "GET /validator/query" do
     test "renders the query form", %{conn: conn} do
       conn = get(conn, ~p"/validator/query")
-      assert html_response(conn, 200) =~ "Validator Rewards Query"
-      assert html_response(conn, 200) =~ "Query Rewards"
+      response = html_response(conn, 200)
+      assert response =~ "Validator Rewards Query"
+      assert response =~ "Query All Consensus"
     end
   end
 
-  describe "POST /validator/query" do
-    test "renders results with valid params", %{conn: conn} do
+  describe "POST /validator/query with attestation" do
+    test "renders attestation results", %{conn: conn} do
       stub_successful_query()
 
       conn =
         post(conn, ~p"/validator/query", %{
-          "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "3200"}
+          "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "3200", "category" => "attestation"}
         })
 
       response = html_response(conn, 200)
       assert response =~ "Validator Index"
       assert response =~ "42"
       assert response =~ "Epoch"
+      assert response =~ "Attestation"
     end
+  end
 
-    test "renders error for invalid pubkey", %{conn: conn} do
+  describe "POST /validator/query with all" do
+    test "renders all categories", %{conn: conn} do
+      stub_successful_query()
+
       conn =
         post(conn, ~p"/validator/query", %{
-          "validator_query" => %{"pubkey" => "not-a-key", "last_n_slots" => "100"}
+          "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "3200", "category" => "all"}
         })
 
       response = html_response(conn, 200)
-      assert response =~ "Invalid public key"
+      assert response =~ "Validator Index"
+      assert response =~ "Epoch"
+      assert response =~ "Attestation"
+      assert response =~ "Sync"
+      assert response =~ "Block Proposal"
+    end
+  end
+
+  describe "POST /validator/query error cases" do
+    test "renders error for invalid pubkey", %{conn: conn} do
+      conn =
+        post(conn, ~p"/validator/query", %{
+          "validator_query" => %{"pubkey" => "not-a-key", "last_n_slots" => "100", "category" => "attestation"}
+        })
+
+      assert html_response(conn, 200) =~ "Invalid public key"
     end
 
     test "renders error for invalid slot count", %{conn: conn} do
       conn =
         post(conn, ~p"/validator/query", %{
-          "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "0"}
+          "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "0", "category" => "attestation"}
         })
 
-      response = html_response(conn, 200)
-      assert response =~ "Slots must be a number"
+      assert html_response(conn, 200) =~ "Slots must be a number"
     end
 
     test "renders error for too many slots", %{conn: conn} do
       conn =
         post(conn, ~p"/validator/query", %{
-          "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "200000"}
+          "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "200000", "category" => "attestation"}
         })
 
-      response = html_response(conn, 200)
-      assert response =~ "Slots must be a number"
+      assert html_response(conn, 200) =~ "Slots must be a number"
     end
 
     test "renders error when API fails", %{conn: conn} do
@@ -105,11 +130,10 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
 
       conn =
         post(conn, ~p"/validator/query", %{
-          "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "100"}
+          "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "100", "category" => "attestation"}
         })
 
-      response = html_response(conn, 200)
-      assert response =~ "Validator not found"
+      assert html_response(conn, 200) =~ "Validator not found"
     end
   end
 end

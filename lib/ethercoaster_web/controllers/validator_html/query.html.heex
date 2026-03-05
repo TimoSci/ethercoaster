@@ -1,12 +1,26 @@
 <.header>
   Validator Rewards Query
-  <:subtitle>Query attestation rewards for a validator over a range of slots.</:subtitle>
+  <:subtitle>Query consensus-layer rewards for a validator over a range of slots.</:subtitle>
 </.header>
 
 <.form for={@form} action={~p"/validator/query"} method="post" class="mt-4 space-y-4">
   <.input field={@form[:pubkey]} type="text" label="Validator Public Key" placeholder="0x..." />
   <.input field={@form[:last_n_slots]} type="number" label="Last N Slots" placeholder="3200" min="1" max="100000" />
-  <.button>Query Rewards</.button>
+
+  <div class="flex flex-wrap gap-2 mt-2">
+    <.button name="validator_query[category]" value="all" class="btn btn-primary">
+      Query All Consensus
+    </.button>
+    <.button name="validator_query[category]" value="attestation" class="btn btn-primary btn-soft">
+      Query Attestation
+    </.button>
+    <.button name="validator_query[category]" value="sync_committee" class="btn btn-primary btn-soft">
+      Query Sync Committee
+    </.button>
+    <.button name="validator_query[category]" value="block_proposal" class="btn btn-primary btn-soft">
+      Query Block Proposals
+    </.button>
+  </div>
 </.form>
 
 <div :if={@error} class="alert alert-error mt-4">
@@ -22,12 +36,98 @@
     <:item title="Total Net Reward">{format_gwei(@result.total_reward)} Gwei</:item>
   </.list>
 
-  <.table id="epoch-rewards" rows={@result.epoch_rewards}>
-    <:col :let={r} label="Epoch">{r.epoch}</:col>
-    <:col :let={r} label="Head" title="Reward for correctly attesting to the head of the chain (most recent block)">{format_gwei(r.head)}</:col>
-    <:col :let={r} label="Target" title="Reward for correctly attesting to the target checkpoint (current epoch boundary block)">{format_gwei(r.target)}</:col>
-    <:col :let={r} label="Source" title="Reward for correctly attesting to the source checkpoint (last justified epoch boundary block)">{format_gwei(r.source)}</:col>
-    <:col :let={r} label="Inactivity">{format_gwei(r.inactivity)}</:col>
-    <:col :let={r} label="Total">{format_gwei(r.total)}</:col>
-  </.table>
+  <div class="overflow-x-auto mt-4">
+    <table class="table table-zebra table-sm">
+      <thead>
+        <tr>
+          <th rowspan="2" class="align-bottom">Epoch</th>
+          <th
+            :if={:attestation in @result.queried_categories}
+            colspan="4"
+            class="text-center border-b-0 border-l border-base-300"
+          >
+            Attestation
+          </th>
+          <th
+            :if={:sync_committee in @result.queried_categories}
+            class="text-center border-b-0 border-l border-base-300"
+            rowspan="2"
+          >
+            <div class="flex flex-col items-center">
+              <span>Sync</span>
+              <span>Committee</span>
+            </div>
+          </th>
+          <th
+            :if={:block_proposal in @result.queried_categories}
+            colspan="2"
+            class="text-center border-b-0 border-l border-base-300"
+          >
+            Block Proposal
+          </th>
+          <th rowspan="2" class="align-bottom border-l border-base-300">Total</th>
+        </tr>
+        <tr>
+          <th
+            :if={:attestation in @result.queried_categories}
+            class="border-l border-base-300"
+            title="Reward for correctly attesting to the head of the chain"
+          >
+            Head
+          </th>
+          <th
+            :if={:attestation in @result.queried_categories}
+            title="Reward for correctly attesting to the target checkpoint"
+          >
+            Target
+          </th>
+          <th
+            :if={:attestation in @result.queried_categories}
+            title="Reward for correctly attesting to the source checkpoint"
+          >
+            Source
+          </th>
+          <th :if={:attestation in @result.queried_categories} title="Inactivity penalty">
+            Inact.
+          </th>
+          <th
+            :if={:block_proposal in @result.queried_categories}
+            class="border-l border-base-300"
+            title="Slot where block was proposed"
+          >
+            Slot
+          </th>
+          <th
+            :if={:block_proposal in @result.queried_categories}
+            title="Total block proposal reward"
+          >
+            Reward
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr :for={row <- @result.epoch_rows}>
+          <td>{row.epoch}</td>
+          <td :if={:attestation in @result.queried_categories} class="border-l border-base-300">
+            {format_gwei(row.att_head)}
+          </td>
+          <td :if={:attestation in @result.queried_categories}>{format_gwei(row.att_target)}</td>
+          <td :if={:attestation in @result.queried_categories}>{format_gwei(row.att_source)}</td>
+          <td :if={:attestation in @result.queried_categories}>
+            {format_gwei(row.att_inactivity)}
+          </td>
+          <td :if={:sync_committee in @result.queried_categories} class="border-l border-base-300">
+            {format_gwei(row.sync_reward)}
+          </td>
+          <td :if={:block_proposal in @result.queried_categories} class="border-l border-base-300">
+            {if row.proposal_slot, do: row.proposal_slot, else: "—"}
+          </td>
+          <td :if={:block_proposal in @result.queried_categories}>
+            {format_gwei(row.proposal_total)}
+          </td>
+          <td class="border-l border-base-300 font-semibold">{format_gwei(epoch_total(row))}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>

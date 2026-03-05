@@ -62,17 +62,6 @@ defmodule Ethercoaster.Validators do
     end
   end
 
-  @doc """
-  Legacy wrapper — queries attestation rewards only.
-
-  Deprecated: use `query/3` instead.
-  """
-  @spec query_rewards(String.t(), pos_integer()) ::
-          {:ok, QueryResult.t()} | {:error, String.t()}
-  def query_rewards(pubkey, last_n_slots) do
-    query(pubkey, last_n_slots, [:attestation])
-  end
-
   defp resolve_validator_index(pubkey) do
     case Beacon.get_validator("head", pubkey) do
       {:ok, %{"index" => index}} -> {:ok, parse_int(index)}
