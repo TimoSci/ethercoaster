@@ -109,6 +109,10 @@ defmodule Ethercoaster.BeaconChain.Beacon do
 
   # Rewards
 
+  @doc "Returns block rewards for the given `block_id`."
+  def get_block_rewards(block_id),
+    do: Client.get("/eth/v1/beacon/rewards/blocks/#{block_id}")
+
   @doc "Returns sync committee rewards for `block_id`, posting `validator_ids` to filter."
   def get_sync_committee_rewards(block_id, validator_ids \\ []),
     do: Client.post("/eth/v1/beacon/rewards/sync_committee/#{block_id}", validator_ids)
