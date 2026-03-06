@@ -12,7 +12,35 @@
 
 # --- Transaction categories and types ---
 
-alias Ethercoaster.{Repo, TransactionCategory, TransactionType}
+alias Ethercoaster.{Repo, TransactionCategory, TransactionEvent, TransactionType}
+
+# --- Transaction events ---
+
+event_names = [
+  "Attestation reward",
+  "Inactivity leak",
+  "Sync committee participation",
+  "Block proposal",
+  "Slashing",
+  "Deposit",
+  "Voluntary exit",
+  "Withdrawal",
+  "Consolidation"
+]
+
+for name <- event_names do
+  Repo.insert!(%TransactionEvent{name: name},
+    on_conflict: :nothing,
+    conflict_target: :name
+  )
+end
+
+events =
+  Map.new(event_names, fn name ->
+    {name, Repo.get_by!(TransactionEvent, name: name)}
+  end)
+
+# --- Transaction categories ---
 
 categories = %{
   "Attestation" =>
@@ -74,16 +102,16 @@ for type <- transaction_types do
   Repo.insert!(
     %TransactionType{
       name: type.name,
-      event: type.event,
       chain: type.chain,
-      category_id: categories[type.category].id
+      category_id: categories[type.category].id,
+      event_id: events[type.event].id
     },
     on_conflict: :nothing,
     conflict_target: :name
   )
 end
 
-IO.puts("Seeded #{length(transaction_types)} transaction types in #{map_size(categories)} categories")
+IO.puts("Seeded #{length(event_names)} events, #{length(transaction_types)} transaction types in #{map_size(categories)} categories")
 
 # Import ESTV price CSV files
 Path.wildcard(Path.join(:code.priv_dir(:ethercoaster), "repo/data/*.csv"))
