@@ -14,6 +14,7 @@ defmodule Ethercoaster.Service do
 
     many_to_many :validators, Ethercoaster.ValidatorRecord,
       join_through: "services_validators",
+      join_keys: [service_id: :id, validator_id: :id],
       on_replace: :delete
 
     timestamps(type: :utc_datetime)

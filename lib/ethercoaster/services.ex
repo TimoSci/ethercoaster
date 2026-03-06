@@ -7,7 +7,7 @@ defmodule Ethercoaster.Services do
 
   def list_services do
     Service
-    |> order_by(desc: :inserted_at)
+    |> order_by([s], desc: s.inserted_at, desc: s.id)
     |> preload(:validators)
     |> Repo.all()
   end
