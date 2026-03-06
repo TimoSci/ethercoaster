@@ -21,6 +21,8 @@ defmodule EthercoasterWeb.Router do
 
     get "/validator/query", ValidatorController, :query
     post "/validator/query", ValidatorController, :query
+
+    live "/services", ServiceLive
   end
 
   # Other scopes may use custom stacks.
