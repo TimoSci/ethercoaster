@@ -1,4 +1,4 @@
-defmodule Ethercoaster.Validators.EpochRow do
+defmodule Ethercoaster.Validator.EpochRow do
   @moduledoc """
   Unified row for one epoch combining all reward categories.
 

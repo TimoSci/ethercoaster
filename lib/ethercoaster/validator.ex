@@ -1,4 +1,4 @@
-defmodule Ethercoaster.Validators do
+defmodule Ethercoaster.Validator do
   @moduledoc """
   Context for querying validator consensus-layer rewards from the Beacon Chain API.
 
@@ -9,7 +9,7 @@ defmodule Ethercoaster.Validators do
   """
 
   alias Ethercoaster.BeaconChain.{Beacon, Node, Validator}
-  alias Ethercoaster.Validators.{EpochRow, ProposalReward, QueryResult, SyncReward}
+  alias Ethercoaster.Validator.{EpochRow, ProposalReward, QueryResult, SyncReward}
 
   @max_epochs 100
   @slots_per_epoch 32

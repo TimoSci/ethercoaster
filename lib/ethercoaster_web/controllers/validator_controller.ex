@@ -3,7 +3,7 @@ defmodule EthercoasterWeb.ValidatorController do
 
   import Phoenix.Component, only: [to_form: 2]
 
-  alias Ethercoaster.Validators
+  alias Ethercoaster.Validator
 
   @valid_categories ~w(attestation sync_committee block_proposal all)
 
@@ -15,7 +15,7 @@ defmodule EthercoasterWeb.ValidatorController do
     with {:ok, pubkey} <- validate_pubkey(pubkey),
          {:ok, last_n_slots} <- validate_slots(slots_raw),
          {:ok, categories} <- parse_categories(category) do
-      case Validators.query(pubkey, last_n_slots, categories) do
+      case Validator.query(pubkey, last_n_slots, categories) do
         {:ok, result} ->
           render(conn, :query,
             form: to_form(%{"pubkey" => pubkey, "last_n_slots" => slots_raw}, as: :validator_query),

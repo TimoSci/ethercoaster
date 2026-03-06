@@ -1,8 +1,8 @@
-defmodule Ethercoaster.ValidatorsTest do
+defmodule Ethercoaster.ValidatorTest do
   use ExUnit.Case, async: true
 
   alias Ethercoaster.BeaconChain.Client
-  alias Ethercoaster.Validators
+  alias Ethercoaster.Validator
 
   @pubkey "0x" <> String.duplicate("ab", 48)
 
@@ -153,7 +153,7 @@ defmodule Ethercoaster.ValidatorsTest do
         stub_attestation_rewards("42")
       ])
 
-      assert {:ok, result} = Validators.query(@pubkey, 3200, [:attestation])
+      assert {:ok, result} = Validator.query(@pubkey, 3200, [:attestation])
       assert result.pubkey == @pubkey
       assert result.validator_index == 42
       assert :attestation in result.queried_categories
@@ -180,7 +180,7 @@ defmodule Ethercoaster.ValidatorsTest do
         stub_sync_committee_rewards("42", "500")
       ])
 
-      assert {:ok, result} = Validators.query(@pubkey, 3200, [:sync_committee])
+      assert {:ok, result} = Validator.query(@pubkey, 3200, [:sync_committee])
       assert :sync_committee in result.queried_categories
       assert length(result.epoch_rows) > 0
 
@@ -196,7 +196,7 @@ defmodule Ethercoaster.ValidatorsTest do
         stub_sync_duties("42", on_committee: false)
       ])
 
-      assert {:ok, result} = Validators.query(@pubkey, 3200, [:sync_committee])
+      assert {:ok, result} = Validator.query(@pubkey, 3200, [:sync_committee])
       assert :sync_committee in result.queried_categories
       assert length(result.epoch_rows) > 0
 
@@ -216,7 +216,7 @@ defmodule Ethercoaster.ValidatorsTest do
         stub_block_rewards("50000")
       ])
 
-      assert {:ok, result} = Validators.query(@pubkey, 3200, [:block_proposal])
+      assert {:ok, result} = Validator.query(@pubkey, 3200, [:block_proposal])
       assert :block_proposal in result.queried_categories
 
       rows_with_proposals = Enum.filter(result.epoch_rows, & &1.proposal_total)
@@ -231,7 +231,7 @@ defmodule Ethercoaster.ValidatorsTest do
         stub_proposer_duties("99", [3168])
       ])
 
-      assert {:ok, result} = Validators.query(@pubkey, 3200, [:block_proposal])
+      assert {:ok, result} = Validator.query(@pubkey, 3200, [:block_proposal])
       assert Enum.all?(result.epoch_rows, &is_nil(&1.proposal_total))
     end
   end
@@ -249,7 +249,7 @@ defmodule Ethercoaster.ValidatorsTest do
       ])
 
       assert {:ok, result} =
-               Validators.query(@pubkey, 3200, [:attestation, :sync_committee, :block_proposal])
+               Validator.query(@pubkey, 3200, [:attestation, :sync_committee, :block_proposal])
 
       assert :attestation in result.queried_categories
       assert :sync_committee in result.queried_categories
@@ -271,7 +271,7 @@ defmodule Ethercoaster.ValidatorsTest do
         end
       end)
 
-      assert {:error, message} = Validators.query(@pubkey, 100, [:attestation])
+      assert {:error, message} = Validator.query(@pubkey, 100, [:attestation])
       assert message =~ "Validator not found"
     end
   end
@@ -290,7 +290,7 @@ defmodule Ethercoaster.ValidatorsTest do
         end
       end)
 
-      assert {:error, message} = Validators.query(@pubkey, 100, [:attestation])
+      assert {:error, message} = Validator.query(@pubkey, 100, [:attestation])
       assert message =~ "beacon node"
     end
   end

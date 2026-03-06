@@ -1,4 +1,4 @@
-defmodule Ethercoaster.Validators.SyncReward do
+defmodule Ethercoaster.Validator.SyncReward do
   @moduledoc """
   Aggregated sync committee reward for one epoch (sum of per-slot rewards).
 

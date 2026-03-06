@@ -1,9 +1,9 @@
-defmodule Ethercoaster.Validators.QueryResult do
+defmodule Ethercoaster.Validator.QueryResult do
   @moduledoc """
   Wraps the full result of a validator rewards query.
   """
 
-  alias Ethercoaster.Validators.EpochRow
+  alias Ethercoaster.Validator.EpochRow
 
   defstruct [
     :pubkey,

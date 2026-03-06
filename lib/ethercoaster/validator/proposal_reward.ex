@@ -1,4 +1,4 @@
-defmodule Ethercoaster.Validators.ProposalReward do
+defmodule Ethercoaster.Validator.ProposalReward do
   @moduledoc """
   Block proposal reward for one slot.
 
