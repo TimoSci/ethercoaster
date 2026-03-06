@@ -23,6 +23,8 @@ defmodule Ethercoaster.Application do
         Ethercoaster.Repo,
         {DNSCluster, query: Application.get_env(:ethercoaster, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: Ethercoaster.PubSub},
+        {Registry, keys: :unique, name: Ethercoaster.ServiceRegistry},
+        {Ethercoaster.Service.Manager, []},
         if(beacon_config[:events_enabled],
           do:
             {Ethercoaster.BeaconChain.Events.Listener,
