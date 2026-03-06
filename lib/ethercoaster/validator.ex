@@ -13,6 +13,8 @@ defmodule Ethercoaster.Validator do
 
   @max_epochs 100
   @slots_per_epoch 32
+  @seconds_per_slot 12
+  @seconds_per_epoch @slots_per_epoch * @seconds_per_slot
 
   defp max_concurrency do
     :ethercoaster
@@ -24,49 +26,83 @@ defmodule Ethercoaster.Validator do
 
   @doc """
   Queries rewards for a validator over the last `last_n_slots` slots.
-
-  `categories` is a list of reward types to fetch.
-  Returns `{:ok, QueryResult.t()}` or `{:error, String.t()}`.
   """
-  @spec query(String.t(), pos_integer(), [category()]) ::
+  @spec query_by_slots(String.t(), pos_integer(), [category()]) ::
           {:ok, QueryResult.t()} | {:error, String.t()}
-  def query(pubkey, last_n_slots, categories) do
+  def query_by_slots(pubkey, last_n_slots, categories) do
     with {:ok, validator_index} <- resolve_validator_index(pubkey),
          {:ok, head_slot} <- get_head_slot(),
-         {:ok, {from_epoch, to_epoch}} <- compute_epoch_range(head_slot, last_n_slots) do
-      index_str = Integer.to_string(validator_index)
-
-      results =
-        categories
-        |> Enum.map(fn cat ->
-          Task.async(fn -> {cat, fetch_category(cat, from_epoch, to_epoch, index_str)} end)
-        end)
-        |> Task.await_many(120_000)
-        |> Map.new()
-
-      epoch_rows = merge_epoch_rows(from_epoch, to_epoch, results, categories)
-
-      total_reward =
-        Enum.reduce(epoch_rows, 0, fn row, acc ->
-          acc +
-            (row.att_head || 0) + (row.att_target || 0) +
-            (row.att_source || 0) + (row.att_inactivity || 0) +
-            (row.sync_reward || 0) + (row.proposal_total || 0)
-        end)
-
-      {:ok,
-       %QueryResult{
-         pubkey: pubkey,
-         validator_index: validator_index,
-         epoch_rows: epoch_rows,
-         from_epoch: from_epoch,
-         to_epoch: to_epoch,
-         total_reward: total_reward,
-         epoch_count: length(epoch_rows),
-         queried_categories: categories
-       }}
+         {:ok, {from_epoch, to_epoch}} <- compute_epoch_range_from_slots(head_slot, last_n_slots) do
+      fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories)
     end
   end
+
+  @doc """
+  Queries rewards for a validator over the last `last_n_epochs` epochs.
+  """
+  @spec query_by_epochs(String.t(), pos_integer(), [category()]) ::
+          {:ok, QueryResult.t()} | {:error, String.t()}
+  def query_by_epochs(pubkey, last_n_epochs, categories) do
+    with {:ok, validator_index} <- resolve_validator_index(pubkey),
+         {:ok, head_slot} <- get_head_slot(),
+         {:ok, {from_epoch, to_epoch}} <- compute_epoch_range_from_count(head_slot, last_n_epochs) do
+      fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories)
+    end
+  end
+
+  @doc """
+  Queries rewards for a validator over an explicit epoch range.
+  """
+  @spec query_by_range(String.t(), non_neg_integer(), non_neg_integer(), [category()]) ::
+          {:ok, QueryResult.t()} | {:error, String.t()}
+  def query_by_range(pubkey, from_epoch, to_epoch, categories) do
+    with {:ok, validator_index} <- resolve_validator_index(pubkey),
+         {:ok, {from_epoch, to_epoch}} <- validate_epoch_range(from_epoch, to_epoch) do
+      fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories)
+    end
+  end
+
+  # --- Shared core ---
+
+  defp fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories) do
+    index_str = Integer.to_string(validator_index)
+
+    genesis_task = Task.async(fn -> get_genesis_time() end)
+
+    results =
+      categories
+      |> Enum.map(fn cat ->
+        Task.async(fn -> {cat, fetch_category(cat, from_epoch, to_epoch, index_str)} end)
+      end)
+      |> Task.await_many(120_000)
+      |> Map.new()
+
+    genesis_time = Task.await(genesis_task, 10_000)
+
+    epoch_rows = merge_epoch_rows(from_epoch, to_epoch, results, categories, genesis_time)
+
+    total_reward =
+      Enum.reduce(epoch_rows, 0, fn row, acc ->
+        acc +
+          (row.att_head || 0) + (row.att_target || 0) +
+          (row.att_source || 0) + (row.att_inactivity || 0) +
+          (row.sync_reward || 0) + (row.proposal_total || 0)
+      end)
+
+    {:ok,
+     %QueryResult{
+       pubkey: pubkey,
+       validator_index: validator_index,
+       epoch_rows: epoch_rows,
+       from_epoch: from_epoch,
+       to_epoch: to_epoch,
+       total_reward: total_reward,
+       epoch_count: length(epoch_rows),
+       queried_categories: categories
+     }}
+  end
+
+  # --- Resolvers ---
 
   defp resolve_validator_index(pubkey) do
     case Beacon.get_validator("head", pubkey) do
@@ -84,7 +120,16 @@ defmodule Ethercoaster.Validator do
     end
   end
 
-  defp compute_epoch_range(head_slot, last_n_slots) do
+  defp get_genesis_time do
+    case Beacon.get_genesis() do
+      {:ok, %{"genesis_time" => gt}} -> parse_int(gt)
+      _ -> 1_606_824_023
+    end
+  end
+
+  # --- Epoch range computation ---
+
+  defp compute_epoch_range_from_slots(head_slot, last_n_slots) do
     to_epoch = div(head_slot, @slots_per_epoch) - 1
     from_epoch = max(div(head_slot - last_n_slots, @slots_per_epoch), 0)
     from_epoch = max(from_epoch, to_epoch - @max_epochs + 1)
@@ -95,6 +140,36 @@ defmodule Ethercoaster.Validator do
       {:ok, {max(from_epoch, 0), to_epoch}}
     end
   end
+
+  defp compute_epoch_range_from_count(head_slot, last_n_epochs) do
+    to_epoch = div(head_slot, @slots_per_epoch) - 1
+    clamped = min(last_n_epochs, @max_epochs)
+    from_epoch = max(to_epoch - clamped + 1, 0)
+
+    if to_epoch < 0 do
+      {:error, "No completed epochs yet"}
+    else
+      {:ok, {from_epoch, to_epoch}}
+    end
+  end
+
+  defp validate_epoch_range(from_epoch, to_epoch) do
+    cond do
+      from_epoch < 0 or to_epoch < 0 ->
+        {:error, "Epochs must be non-negative."}
+
+      from_epoch > to_epoch ->
+        {:error, "From epoch must be less than or equal to To epoch."}
+
+      to_epoch - from_epoch + 1 > @max_epochs ->
+        {:error, "Range exceeds maximum of #{@max_epochs} epochs."}
+
+      true ->
+        {:ok, {from_epoch, to_epoch}}
+    end
+  end
+
+  # --- Category dispatchers ---
 
   defp fetch_category(:attestation, from_epoch, to_epoch, index_str),
     do: fetch_attestation_rewards(from_epoch, to_epoch, index_str)
@@ -257,7 +332,7 @@ defmodule Ethercoaster.Validator do
 
   # --- Merge into EpochRows ---
 
-  defp merge_epoch_rows(from_epoch, to_epoch, results, categories) do
+  defp merge_epoch_rows(from_epoch, to_epoch, results, categories, genesis_time) do
     att_map =
       if :attestation in categories do
         Map.get(results, :attestation, []) |> Map.new(&{&1.epoch, &1})
@@ -291,6 +366,7 @@ defmodule Ethercoaster.Validator do
 
       %EpochRow{
         epoch: epoch,
+        timestamp: epoch_to_datetime(epoch, genesis_time),
         att_head: att && att.head,
         att_target: att && att.target,
         att_source: att && att.source,
@@ -300,6 +376,11 @@ defmodule Ethercoaster.Validator do
         proposal_slot: proposal && proposal.slot
       }
     end)
+  end
+
+  defp epoch_to_datetime(epoch, genesis_time) do
+    (genesis_time + epoch * @seconds_per_epoch)
+    |> DateTime.from_unix!()
   end
 
   defp parse_int(val) when is_integer(val), do: val

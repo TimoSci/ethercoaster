@@ -1,11 +1,22 @@
 <.header>
   Validator Rewards Query
-  <:subtitle>Query consensus-layer rewards for a validator over a range of slots.</:subtitle>
+  <:subtitle>Query consensus-layer rewards for a validator over a range of epochs.</:subtitle>
 </.header>
 
 <.form for={@form} action={~p"/validator/query"} method="post" class="mt-4 space-y-4">
   <.input field={@form[:pubkey]} type="text" label="Validator Public Key" placeholder="0x..." />
+
   <.input field={@form[:last_n_slots]} type="number" label="Last N Slots" placeholder="3200" min="1" max="100000" />
+  <.input field={@form[:last_n_epochs]} type="number" label="Last N Epochs" placeholder="100" min="1" max="100" />
+
+  <div class="flex gap-4 items-end">
+    <div class="flex-1">
+      <.input field={@form[:from_epoch]} type="number" label="From Epoch" placeholder="0" min="0" />
+    </div>
+    <div class="flex-1">
+      <.input field={@form[:to_epoch]} type="number" label="To Epoch" placeholder="99" min="0" />
+    </div>
+  </div>
 
   <div class="flex flex-wrap gap-2 mt-2">
     <.button name="validator_query[category]" value="all" class="btn btn-primary">
@@ -41,6 +52,7 @@
       <thead>
         <tr>
           <th rowspan="2" class="align-bottom">Epoch</th>
+          <th rowspan="2" class="align-bottom">Date / Time (UTC)</th>
           <th
             :if={:attestation in @result.queried_categories}
             colspan="4"
@@ -108,6 +120,7 @@
       <tbody>
         <tr :for={row <- @result.epoch_rows}>
           <td>{row.epoch}</td>
+          <td class="whitespace-nowrap text-xs">{format_datetime(row.timestamp)}</td>
           <td :if={:attestation in @result.queried_categories} class="border-l border-base-300">
             {format_gwei(row.att_head)}
           </td>

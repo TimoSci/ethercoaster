@@ -12,6 +12,11 @@ defmodule EthercoasterWeb.ValidatorHTML do
 
   def format_gwei(nil), do: "—"
 
+  @doc "Formats a DateTime as YYYY-MM-DD HH:MM:SS UTC."
+  def format_datetime(%DateTime{} = dt) do
+    Calendar.strftime(dt, "%Y-%m-%d %H:%M:%S")
+  end
+
   @doc "Computes epoch total from an EpochRow."
   def epoch_total(row) do
     (row.att_head || 0) + (row.att_target || 0) +

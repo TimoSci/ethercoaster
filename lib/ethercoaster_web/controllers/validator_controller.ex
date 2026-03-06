@@ -9,31 +9,21 @@ defmodule EthercoasterWeb.ValidatorController do
 
   def query(conn, %{"validator_query" => params}) do
     pubkey = String.trim(params["pubkey"] || "")
-    slots_raw = params["last_n_slots"] || ""
     category = params["category"] || "attestation"
+    form_data = Map.take(params, ~w(pubkey last_n_slots last_n_epochs from_epoch to_epoch))
 
     with {:ok, pubkey} <- validate_pubkey(pubkey),
-         {:ok, last_n_slots} <- validate_slots(slots_raw),
-         {:ok, categories} <- parse_categories(category) do
-      case Validator.query(pubkey, last_n_slots, categories) do
-        {:ok, result} ->
-          render(conn, :query,
-            form: to_form(%{"pubkey" => pubkey, "last_n_slots" => slots_raw}, as: :validator_query),
-            result: result,
-            error: nil
-          )
-
-        {:error, message} ->
-          render(conn, :query,
-            form: to_form(%{"pubkey" => pubkey, "last_n_slots" => slots_raw}, as: :validator_query),
-            result: nil,
-            error: message
-          )
-      end
+         {:ok, categories} <- parse_categories(category),
+         {:ok, result} <- dispatch_query(pubkey, params, categories) do
+      render(conn, :query,
+        form: to_form(form_data, as: :validator_query),
+        result: result,
+        error: nil
+      )
     else
       {:error, message} ->
         render(conn, :query,
-          form: to_form(%{"pubkey" => pubkey, "last_n_slots" => slots_raw}, as: :validator_query),
+          form: to_form(form_data, as: :validator_query),
           result: nil,
           error: message
         )
@@ -48,6 +38,34 @@ defmodule EthercoasterWeb.ValidatorController do
     )
   end
 
+  defp dispatch_query(pubkey, params, categories) do
+    from_raw = String.trim(params["from_epoch"] || "")
+    to_raw = String.trim(params["to_epoch"] || "")
+    epochs_raw = String.trim(params["last_n_epochs"] || "")
+    slots_raw = String.trim(params["last_n_slots"] || "")
+
+    cond do
+      from_raw != "" and to_raw != "" ->
+        with {:ok, from_epoch} <- parse_non_neg_int(from_raw, "From Epoch"),
+             {:ok, to_epoch} <- parse_non_neg_int(to_raw, "To Epoch") do
+          Validator.query_by_range(pubkey, from_epoch, to_epoch, categories)
+        end
+
+      epochs_raw != "" ->
+        with {:ok, n} <- parse_pos_int(epochs_raw, "Last N Epochs", 1, 100) do
+          Validator.query_by_epochs(pubkey, n, categories)
+        end
+
+      slots_raw != "" ->
+        with {:ok, n} <- parse_pos_int(slots_raw, "Last N Slots", 1, 100_000) do
+          Validator.query_by_slots(pubkey, n, categories)
+        end
+
+      true ->
+        {:error, "Provide Last N Slots, Last N Epochs, or a From/To Epoch range."}
+    end
+  end
+
   defp validate_pubkey(pubkey) do
     if String.match?(pubkey, ~r/\A0x[0-9a-fA-F]{96}\z/) do
       {:ok, pubkey}
@@ -56,10 +74,17 @@ defmodule EthercoasterWeb.ValidatorController do
     end
   end
 
-  defp validate_slots(raw) do
+  defp parse_pos_int(raw, label, min, max) do
     case Integer.parse(raw) do
-      {n, ""} when n >= 1 and n <= 100_000 -> {:ok, n}
-      _ -> {:error, "Slots must be a number between 1 and 100,000."}
+      {n, ""} when n >= min and n <= max -> {:ok, n}
+      _ -> {:error, "#{label} must be a number between #{min} and #{max}."}
+    end
+  end
+
+  defp parse_non_neg_int(raw, label) do
+    case Integer.parse(raw) do
+      {n, ""} when n >= 0 -> {:ok, n}
+      _ -> {:error, "#{label} must be a non-negative integer."}
     end
   end
 

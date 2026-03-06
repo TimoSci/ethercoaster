@@ -7,6 +7,7 @@ defmodule Ethercoaster.Validator.EpochRow do
 
   defstruct [
     :epoch,
+    :timestamp,
     # Attestation (nil if not queried)
     :att_head,
     :att_target,
@@ -21,6 +22,7 @@ defmodule Ethercoaster.Validator.EpochRow do
 
   @type t :: %__MODULE__{
           epoch: non_neg_integer(),
+          timestamp: DateTime.t(),
           att_head: integer() | nil,
           att_target: integer() | nil,
           att_source: integer() | nil,

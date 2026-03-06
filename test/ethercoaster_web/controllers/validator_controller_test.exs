@@ -18,6 +18,15 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
             "data" => %{"head_slot" => "3200", "sync_distance" => "0", "is_syncing" => false}
           })
 
+        conn.request_path == "/eth/v1/beacon/genesis" ->
+          Req.Test.json(conn, %{
+            "data" => %{
+              "genesis_time" => "1606824023",
+              "genesis_validators_root" => "0x0000",
+              "genesis_fork_version" => "0x00000000"
+            }
+          })
+
         conn.request_path =~ "/rewards/attestations/" ->
           Req.Test.json(conn, %{
             "data" => %{
@@ -89,6 +98,43 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
     end
   end
 
+  describe "POST /validator/query with last_n_epochs" do
+    test "renders results for last N epochs", %{conn: conn} do
+      stub_successful_query()
+
+      conn =
+        post(conn, ~p"/validator/query", %{
+          "validator_query" => %{"pubkey" => @pubkey, "last_n_epochs" => "10", "category" => "attestation"}
+        })
+
+      response = html_response(conn, 200)
+      assert response =~ "Validator Index"
+      assert response =~ "42"
+      assert response =~ "Epoch"
+    end
+  end
+
+  describe "POST /validator/query with epoch range" do
+    test "renders results for epoch range", %{conn: conn} do
+      stub_successful_query()
+
+      conn =
+        post(conn, ~p"/validator/query", %{
+          "validator_query" => %{
+            "pubkey" => @pubkey,
+            "from_epoch" => "50",
+            "to_epoch" => "59",
+            "category" => "attestation"
+          }
+        })
+
+      response = html_response(conn, 200)
+      assert response =~ "Validator Index"
+      assert response =~ "42"
+      assert response =~ "50"
+    end
+  end
+
   describe "POST /validator/query error cases" do
     test "renders error for invalid pubkey", %{conn: conn} do
       conn =
@@ -105,7 +151,7 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
           "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "0", "category" => "attestation"}
         })
 
-      assert html_response(conn, 200) =~ "Slots must be a number"
+      assert html_response(conn, 200) =~ "Last N Slots must be a number"
     end
 
     test "renders error for too many slots", %{conn: conn} do
@@ -114,7 +160,41 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
           "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "200000", "category" => "attestation"}
         })
 
-      assert html_response(conn, 200) =~ "Slots must be a number"
+      assert html_response(conn, 200) =~ "Last N Slots must be a number"
+    end
+
+    test "renders error for invalid epoch count", %{conn: conn} do
+      conn =
+        post(conn, ~p"/validator/query", %{
+          "validator_query" => %{"pubkey" => @pubkey, "last_n_epochs" => "0", "category" => "attestation"}
+        })
+
+      assert html_response(conn, 200) =~ "Last N Epochs must be a number"
+    end
+
+    test "renders error for reversed epoch range", %{conn: conn} do
+      stub_successful_query()
+
+      conn =
+        post(conn, ~p"/validator/query", %{
+          "validator_query" => %{
+            "pubkey" => @pubkey,
+            "from_epoch" => "60",
+            "to_epoch" => "50",
+            "category" => "attestation"
+          }
+        })
+
+      assert html_response(conn, 200) =~ "less than or equal"
+    end
+
+    test "renders error for no input provided", %{conn: conn} do
+      conn =
+        post(conn, ~p"/validator/query", %{
+          "validator_query" => %{"pubkey" => @pubkey, "category" => "attestation"}
+        })
+
+      assert html_response(conn, 200) =~ "Provide Last N Slots"
     end
 
     test "renders error when API fails", %{conn: conn} do
