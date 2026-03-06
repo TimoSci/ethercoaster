@@ -43,22 +43,23 @@ defmodule EthercoasterWeb.ValidatorController do
     to_raw = String.trim(params["to_epoch"] || "")
     epochs_raw = String.trim(params["last_n_epochs"] || "")
     slots_raw = String.trim(params["last_n_slots"] || "")
+    opts = [reload: params["reload"] == "true"]
 
     cond do
       from_raw != "" and to_raw != "" ->
         with {:ok, from_epoch} <- parse_non_neg_int(from_raw, "From Epoch"),
              {:ok, to_epoch} <- parse_non_neg_int(to_raw, "To Epoch") do
-          Validator.query_by_range(pubkey, from_epoch, to_epoch, categories)
+          Validator.query_by_range(pubkey, from_epoch, to_epoch, categories, opts)
         end
 
       epochs_raw != "" ->
         with {:ok, n} <- parse_pos_int(epochs_raw, "Last N Epochs", 1, 100) do
-          Validator.query_by_epochs(pubkey, n, categories)
+          Validator.query_by_epochs(pubkey, n, categories, opts)
         end
 
       slots_raw != "" ->
         with {:ok, n} <- parse_pos_int(slots_raw, "Last N Slots", 1, 100_000) do
-          Validator.query_by_slots(pubkey, n, categories)
+          Validator.query_by_slots(pubkey, n, categories, opts)
         end
 
       true ->

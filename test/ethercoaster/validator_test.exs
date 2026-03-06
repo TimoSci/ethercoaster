@@ -1,5 +1,5 @@
 defmodule Ethercoaster.ValidatorTest do
-  use ExUnit.Case, async: true
+  use Ethercoaster.DataCase, async: true
 
   alias Ethercoaster.BeaconChain.Client
   alias Ethercoaster.Validator

@@ -6,10 +6,14 @@ defmodule Ethercoaster.Validator do
   - `:attestation` — head/target/source/inactivity per epoch
   - `:sync_committee` — sync committee rewards per epoch
   - `:block_proposal` — block proposal rewards per epoch
+
+  Results are cached in the database. Subsequent queries for the same
+  validator and epoch range load from cache and only fetch missing epochs.
+  Pass `reload: true` in opts to force a fresh fetch from the API.
   """
 
   alias Ethercoaster.BeaconChain.{Beacon, Node, Validator}
-  alias Ethercoaster.Validator.{EpochRow, ProposalReward, QueryResult, SyncReward}
+  alias Ethercoaster.Validator.{Cache, EpochRow, ProposalReward, QueryResult, SyncReward}
 
   @max_epochs 100
   @slots_per_epoch 32
@@ -27,57 +31,70 @@ defmodule Ethercoaster.Validator do
   @doc """
   Queries rewards for a validator over the last `last_n_slots` slots.
   """
-  @spec query_by_slots(String.t(), pos_integer(), [category()]) ::
-          {:ok, QueryResult.t()} | {:error, String.t()}
-  def query_by_slots(pubkey, last_n_slots, categories) do
+  def query_by_slots(pubkey, last_n_slots, categories, opts \\ []) do
     with {:ok, validator_index} <- resolve_validator_index(pubkey),
          {:ok, head_slot} <- get_head_slot(),
          {:ok, {from_epoch, to_epoch}} <- compute_epoch_range_from_slots(head_slot, last_n_slots) do
-      fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories)
+      fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories, opts)
     end
   end
 
   @doc """
   Queries rewards for a validator over the last `last_n_epochs` epochs.
   """
-  @spec query_by_epochs(String.t(), pos_integer(), [category()]) ::
-          {:ok, QueryResult.t()} | {:error, String.t()}
-  def query_by_epochs(pubkey, last_n_epochs, categories) do
+  def query_by_epochs(pubkey, last_n_epochs, categories, opts \\ []) do
     with {:ok, validator_index} <- resolve_validator_index(pubkey),
          {:ok, head_slot} <- get_head_slot(),
          {:ok, {from_epoch, to_epoch}} <- compute_epoch_range_from_count(head_slot, last_n_epochs) do
-      fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories)
+      fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories, opts)
     end
   end
 
   @doc """
   Queries rewards for a validator over an explicit epoch range.
   """
-  @spec query_by_range(String.t(), non_neg_integer(), non_neg_integer(), [category()]) ::
-          {:ok, QueryResult.t()} | {:error, String.t()}
-  def query_by_range(pubkey, from_epoch, to_epoch, categories) do
+  def query_by_range(pubkey, from_epoch, to_epoch, categories, opts \\ []) do
     with {:ok, validator_index} <- resolve_validator_index(pubkey),
          {:ok, {from_epoch, to_epoch}} <- validate_epoch_range(from_epoch, to_epoch) do
-      fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories)
+      fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories, opts)
     end
   end
 
   # --- Shared core ---
 
-  defp fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories) do
+  defp fetch_and_build(pubkey, validator_index, from_epoch, to_epoch, categories, opts) do
+    reload? = Keyword.get(opts, :reload, false)
     index_str = Integer.to_string(validator_index)
 
-    genesis_task = Task.async(fn -> get_genesis_time() end)
+    # Try to set up DB caching; gracefully degrades if DB unavailable
+    validator_record =
+      try do
+        Cache.find_or_create_validator!(pubkey, validator_index)
+      rescue
+        _ -> nil
+      end
+
+    genesis_time = get_genesis_time()
 
     results =
       categories
       |> Enum.map(fn cat ->
-        Task.async(fn -> {cat, fetch_category(cat, from_epoch, to_epoch, index_str)} end)
+        Task.async(fn ->
+          data =
+            if validator_record do
+              fetch_with_cache(
+                cat, from_epoch, to_epoch, index_str,
+                validator_record, genesis_time, reload?
+              )
+            else
+              fetch_category(cat, from_epoch..to_epoch, index_str)
+            end
+
+          {cat, data}
+        end)
       end)
       |> Task.await_many(120_000)
       |> Map.new()
-
-    genesis_time = Task.await(genesis_task, 10_000)
 
     epoch_rows = merge_epoch_rows(from_epoch, to_epoch, results, categories, genesis_time)
 
@@ -100,6 +117,41 @@ defmodule Ethercoaster.Validator do
        epoch_count: length(epoch_rows),
        queried_categories: categories
      }}
+  end
+
+  defp fetch_with_cache(cat, from_epoch, to_epoch, index_str, validator_record, genesis_time, reload?) do
+    category_str = Atom.to_string(cat)
+    all_epochs = Enum.to_list(from_epoch..to_epoch)
+
+    if reload? do
+      Cache.clear_cache(validator_record.id, all_epochs, category_str)
+      data = fetch_category(cat, all_epochs, index_str)
+      Cache.store_and_mark(cat, validator_record.id, data, all_epochs, genesis_time)
+      data
+    else
+      cached_set =
+        Cache.get_cached_epoch_set(validator_record.id, from_epoch, to_epoch, category_str)
+
+      uncached_epochs = Enum.reject(all_epochs, &MapSet.member?(cached_set, &1))
+
+      cached_data =
+        if MapSet.size(cached_set) > 0 do
+          Cache.load_category(cat, validator_record.id, cached_set, validator_record.index)
+        else
+          []
+        end
+
+      api_data =
+        if uncached_epochs != [] do
+          data = fetch_category(cat, uncached_epochs, index_str)
+          Cache.store_and_mark(cat, validator_record.id, data, uncached_epochs, genesis_time)
+          data
+        else
+          []
+        end
+
+      cached_data ++ api_data
+    end
   end
 
   # --- Resolvers ---
@@ -171,19 +223,19 @@ defmodule Ethercoaster.Validator do
 
   # --- Category dispatchers ---
 
-  defp fetch_category(:attestation, from_epoch, to_epoch, index_str),
-    do: fetch_attestation_rewards(from_epoch, to_epoch, index_str)
+  defp fetch_category(:attestation, epochs, index_str),
+    do: fetch_attestation_rewards(epochs, index_str)
 
-  defp fetch_category(:sync_committee, from_epoch, to_epoch, index_str),
-    do: fetch_sync_rewards(from_epoch, to_epoch, index_str)
+  defp fetch_category(:sync_committee, epochs, index_str),
+    do: fetch_sync_rewards(epochs, index_str)
 
-  defp fetch_category(:block_proposal, from_epoch, to_epoch, index_str),
-    do: fetch_proposal_rewards(from_epoch, to_epoch, index_str)
+  defp fetch_category(:block_proposal, epochs, index_str),
+    do: fetch_proposal_rewards(epochs, index_str)
 
   # --- Attestation rewards ---
 
-  defp fetch_attestation_rewards(from_epoch, to_epoch, index_str) do
-    from_epoch..to_epoch
+  defp fetch_attestation_rewards(epochs, index_str) do
+    epochs
     |> Task.async_stream(
       fn epoch ->
         case Beacon.get_attestation_rewards(Integer.to_string(epoch), [index_str]) do
@@ -212,67 +264,75 @@ defmodule Ethercoaster.Validator do
 
   # --- Sync committee rewards ---
 
-  defp fetch_sync_rewards(from_epoch, to_epoch, index_str) do
-    periods = sync_periods(from_epoch, to_epoch)
+  defp fetch_sync_rewards(epochs, index_str) do
+    epoch_list = Enum.to_list(epochs)
 
-    on_committee? =
-      periods
-      |> Task.async_stream(
-        fn {period_start, _period_end} ->
-          case Validator.get_sync_duties(Integer.to_string(period_start), [index_str]) do
-            {:ok, validators} when is_list(validators) and validators != [] -> true
-            _ -> false
-          end
-        end,
-        max_concurrency: 2,
-        timeout: 30_000
-      )
-      |> Enum.any?(fn
-        {:ok, true} -> true
-        _ -> false
-      end)
-
-    if on_committee? do
-      from_epoch..to_epoch
-      |> Task.async_stream(
-        fn epoch ->
-          first_slot = epoch * @slots_per_epoch
-          last_slot = first_slot + @slots_per_epoch - 1
-
-          slot_rewards =
-            first_slot..last_slot
-            |> Task.async_stream(
-              fn slot ->
-                case Beacon.get_sync_committee_rewards(Integer.to_string(slot), [index_str]) do
-                  {:ok, [%{"reward" => reward} | _]} -> {:ok, parse_int(reward)}
-                  _ -> {:ok, 0}
-                end
-              end,
-              max_concurrency: max_concurrency(),
-              timeout: 30_000
-            )
-            |> Enum.map(fn
-              {:ok, {:ok, val}} -> val
-              _ -> 0
-            end)
-
-          %SyncReward{
-            epoch: epoch,
-            validator_index: parse_int(index_str),
-            reward: Enum.sum(slot_rewards)
-          }
-        end,
-        max_concurrency: max_concurrency(),
-        timeout: 60_000
-      )
-      |> Enum.flat_map(fn
-        {:ok, reward} -> [reward]
-        _ -> []
-      end)
+    if epoch_list == [] do
+      []
     else
-      Enum.map(from_epoch..to_epoch, fn epoch ->
-        %SyncReward{epoch: epoch, validator_index: parse_int(index_str), reward: 0}
-      end)
+      from_epoch = Enum.min(epoch_list)
+      to_epoch = Enum.max(epoch_list)
+      periods = sync_periods(from_epoch, to_epoch)
+
+      on_committee? =
+        periods
+        |> Task.async_stream(
+          fn {period_start, _period_end} ->
+            case Validator.get_sync_duties(Integer.to_string(period_start), [index_str]) do
+              {:ok, validators} when is_list(validators) and validators != [] -> true
+              _ -> false
+            end
+          end,
+          max_concurrency: 2,
+          timeout: 30_000
+        )
+        |> Enum.any?(fn
+          {:ok, true} -> true
+          _ -> false
+        end)
+
+      if on_committee? do
+        epoch_list
+        |> Task.async_stream(
+          fn epoch ->
+            first_slot = epoch * @slots_per_epoch
+            last_slot = first_slot + @slots_per_epoch - 1
+
+            slot_rewards =
+              first_slot..last_slot
+              |> Task.async_stream(
+                fn slot ->
+                  case Beacon.get_sync_committee_rewards(Integer.to_string(slot), [index_str]) do
+                    {:ok, [%{"reward" => reward} | _]} -> {:ok, parse_int(reward)}
+                    _ -> {:ok, 0}
+                  end
+                end,
+                max_concurrency: max_concurrency(),
+                timeout: 30_000
+              )
+              |> Enum.map(fn
+                {:ok, {:ok, val}} -> val
+                _ -> 0
+              end)
+
+            %SyncReward{
+              epoch: epoch,
+              validator_index: parse_int(index_str),
+              reward: Enum.sum(slot_rewards)
+            }
+          end,
+          max_concurrency: max_concurrency(),
+          timeout: 60_000
+        )
+        |> Enum.flat_map(fn
+          {:ok, reward} -> [reward]
+          _ -> []
+        end)
+      else
+        Enum.map(epoch_list, fn epoch ->
+          %SyncReward{epoch: epoch, validator_index: parse_int(index_str), reward: 0}
+        end)
+      end
     end
   end
 
@@ -289,8 +349,8 @@ defmodule Ethercoaster.Validator do
 
   # --- Block proposal rewards ---
 
-  defp fetch_proposal_rewards(from_epoch, to_epoch, index_str) do
-    from_epoch..to_epoch
+  defp fetch_proposal_rewards(epochs, index_str) do
+    epochs
     |> Task.async_stream(
       fn epoch ->
         case Validator.get_proposer_duties(Integer.to_string(epoch)) do

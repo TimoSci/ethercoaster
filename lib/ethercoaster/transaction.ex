@@ -5,6 +5,8 @@ defmodule Ethercoaster.Transaction do
   schema "transactions" do
     field :amount, :decimal
     field :datetime, :utc_datetime
+    field :epoch, :integer
+    field :slot, :integer
 
     belongs_to :type, Ethercoaster.TransactionType
     belongs_to :validator, Ethercoaster.ValidatorRecord
@@ -15,7 +17,7 @@ defmodule Ethercoaster.Transaction do
   @doc false
   def changeset(transaction, attrs) do
     transaction
-    |> cast(attrs, [:amount, :datetime, :type_id, :validator_id])
+    |> cast(attrs, [:amount, :datetime, :type_id, :validator_id, :epoch, :slot])
     |> validate_required([:amount, :datetime, :type_id, :validator_id])
     |> foreign_key_constraint(:type_id)
     |> foreign_key_constraint(:validator_id)
