@@ -1,4 +1,4 @@
-defmodule Ethercoaster.Prices do
+defmodule Ethercoaster.ESTVData do
   import Ecto.Query
 
   alias Ethercoaster.{Repo, Price, Token, Currency}
