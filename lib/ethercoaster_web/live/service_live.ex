@@ -85,9 +85,12 @@ defmodule EthercoasterWeb.ServiceLive do
     </.header>
 
     <div class="mt-6 space-y-6">
-      <div class="card bg-base-200 p-6">
-        <h3 class="text-lg font-semibold mb-4">Create Service</h3>
-        <.live_component module={EthercoasterWeb.ServiceLive.FormComponent} id="service-form" form_error={@form_error} />
+      <div class="collapse collapse-arrow bg-base-200">
+        <input type="checkbox" />
+        <div class="collapse-title text-lg font-semibold">Create Service</div>
+        <div class="collapse-content">
+          <.live_component module={EthercoasterWeb.ServiceLive.FormComponent} id="service-form" form_error={@form_error} />
+        </div>
       </div>
 
       <div class="space-y-4">
