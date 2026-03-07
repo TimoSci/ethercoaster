@@ -27,7 +27,7 @@ defmodule Ethercoaster.Service do
     |> validate_number(:batch_size, greater_than: 0)
     |> validate_required([:query_mode, :categories])
     |> validate_inclusion(:query_mode, ["last_n_epochs", "epoch_range"])
-    |> validate_inclusion(:status, ["stopped", "completed"])
+    |> validate_inclusion(:status, ["stopped", "completed", "modified"])
     |> validate_query_mode_fields()
   end
 

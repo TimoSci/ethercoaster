@@ -35,7 +35,7 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
         </div>
         <div class="flex gap-1">
           <button
-            :if={@status in [:stopped, :paused]}
+            :if={@status in [:stopped, :paused, :modified]}
             phx-click="play_service"
             phx-value-id={@service.id}
             class="btn btn-success btn-sm"
@@ -124,6 +124,7 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
         :running -> {"badge-success", "Running"}
         :paused -> {"badge-warning", "Paused"}
         :completed -> {"badge-info", "Completed"}
+        :modified -> {"badge-accent", "Modified"}
         :error -> {"badge-error", "Error"}
         _ -> {"badge-ghost", "Stopped"}
       end

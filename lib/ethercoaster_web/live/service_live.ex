@@ -205,27 +205,27 @@ defmodule EthercoasterWeb.ServiceLive do
   end
 
   def handle_info({:batch_started, _payload}, socket) do
-    worker_states =
-      Enum.reduce(socket.assigns.services, socket.assigns.worker_states, fn service, acc ->
-        case Manager.get_worker_state(service.id) do
-          nil -> acc
-          ws -> Map.put(acc, service.id, ws)
-        end
-      end)
-
-    {:noreply, assign(socket, :worker_states, worker_states)}
+    {:noreply, assign(socket, :worker_states, refresh_worker_states(socket))}
   end
 
   def handle_info({:progress, _payload}, socket) do
-    worker_states =
-      Enum.reduce(socket.assigns.services, socket.assigns.worker_states, fn service, acc ->
+    {:noreply, assign(socket, :worker_states, refresh_worker_states(socket))}
+  end
+
+  defp refresh_worker_states(socket) do
+    Enum.reduce(socket.assigns.services, socket.assigns.worker_states, fn service, acc ->
+      prev = Map.get(acc, service.id)
+
+      # Don't overwrite a locally-set :paused status while worker finishes its batch
+      if prev && prev.status == :paused do
+        acc
+      else
         case Manager.get_worker_state(service.id) do
           nil -> acc
           ws -> Map.put(acc, service.id, ws)
         end
-      end)
-
-    {:noreply, assign(socket, :worker_states, worker_states)}
+      end
+    end)
   end
 
   # --- User actions ---

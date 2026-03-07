@@ -46,6 +46,13 @@ defmodule Ethercoaster.Services do
   end
 
   def update_service(service, attrs, validator_inputs) do
+    attrs =
+      if service.status == "completed" do
+        Map.put(attrs, :status, "modified")
+      else
+        attrs
+      end
+
     Repo.transaction(fn ->
       changeset = Service.changeset(service, attrs)
 
