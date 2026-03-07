@@ -185,10 +185,6 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
             <button type="button" phx-click="add_validator" phx-target={@myself} class="btn btn-soft btn-sm">
               <.icon name="hero-plus" class="size-4" /> Add Validator
             </button>
-            <form phx-change="validate_upload" phx-submit="upload_validators" phx-target={@myself} class="inline-flex gap-2 items-center">
-              <.live_file_input upload={@uploads.validator_file} class="file-input file-input-bordered file-input-sm" />
-              <button type="submit" class="btn btn-soft btn-sm">Upload</button>
-            </form>
           </div>
           <p :if={@upload_error} class="text-error text-sm mt-1">{@upload_error}</p>
         </div>
@@ -299,6 +295,11 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
         <button type="submit" class="btn btn-primary">
           <.icon name="hero-bookmark" class="size-5" /> Save Service
         </button>
+      </form>
+
+      <form phx-change="validate_upload" phx-submit="upload_validators" phx-target={@myself} class="flex gap-2 items-center mt-2">
+        <.live_file_input upload={@uploads.validator_file} class="file-input file-input-bordered file-input-sm" />
+        <button type="submit" class="btn btn-soft btn-sm">Upload Validators</button>
       </form>
     </div>
     """
