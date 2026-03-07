@@ -27,6 +27,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
   @impl true
   def update(assigns, socket) do
     socket = assign(socket, :form_error, assigns[:form_error])
+    socket = assign(socket, :saved_endpoints, assigns[:saved_endpoints] || [])
 
     # On first update, populate fields from service if editing
     if not socket.assigns.initialized do
@@ -83,6 +84,10 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
   def handle_event("update_field", %{"field" => field, "value" => value}, socket) do
     field_atom = String.to_existing_atom(field)
     {:noreply, assign(socket, field_atom, value)}
+  end
+
+  def handle_event("select_endpoint", %{"url" => url}, socket) do
+    {:noreply, assign(socket, :endpoint, url)}
   end
 
   def handle_event("save", _params, socket) do
@@ -325,15 +330,33 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
         <div>
           <label class="label">Endpoint (optional)</label>
-          <input
-            type="text"
-            value={@endpoint}
-            phx-blur="update_field"
-            phx-value-field="endpoint"
-            phx-target={@myself}
-            class="input input-bordered w-full"
-            placeholder="http://localhost:5052"
-          />
+          <div class="flex gap-2">
+            <input
+              type="text"
+              value={@endpoint}
+              phx-blur="update_field"
+              phx-value-field="endpoint"
+              phx-target={@myself}
+              class="input input-bordered flex-1"
+              placeholder="http://localhost:5052"
+            />
+            <div :if={@saved_endpoints != []} class="dropdown dropdown-end">
+              <div tabindex="0" role="button" class="btn btn-ghost">
+                <.icon name="hero-server" class="size-4" /> Saved
+                <.icon name="hero-chevron-down" class="size-3" />
+              </div>
+              <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-10 w-64 p-2 shadow-lg">
+                <li :for={ep <- @saved_endpoints}>
+                  <a phx-click="select_endpoint" phx-value-url={Ethercoaster.EndpointRecord.url(ep)} phx-target={@myself}>
+                    {Ethercoaster.EndpointRecord.url(ep)}
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <.link navigate={~p"/endpoints"} class="btn btn-ghost">
+              <.icon name="hero-cog-6-tooth" class="size-4" /> Manage
+            </.link>
+          </div>
         </div>
 
         <div :if={@form_error} class="alert alert-error">

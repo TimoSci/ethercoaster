@@ -2,6 +2,7 @@ defmodule EthercoasterWeb.ServiceEditLive do
   use EthercoasterWeb, :live_view
 
   alias Ethercoaster.Services
+  alias Ethercoaster.Endpoints
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -11,6 +12,7 @@ defmodule EthercoasterWeb.ServiceEditLive do
       socket
       |> assign(:service, service)
       |> assign(:form_error, nil)
+      |> assign(:saved_endpoints, Endpoints.list_endpoints())
 
     {:ok, socket}
   end
@@ -35,6 +37,7 @@ defmodule EthercoasterWeb.ServiceEditLive do
           mode={:edit}
           service={@service}
           form_error={@form_error}
+          saved_endpoints={@saved_endpoints}
         />
       </div>
     </div>
@@ -43,6 +46,10 @@ defmodule EthercoasterWeb.ServiceEditLive do
 
   @impl true
   def handle_info({:update_service, id, params}, socket) do
+    if params.attrs[:endpoint] && params.attrs.endpoint != "" do
+      Endpoints.ensure_from_url(params.attrs.endpoint)
+    end
+
     service = Services.get_service!(id)
 
     case Services.update_service(service, params.attrs, params.validators) do

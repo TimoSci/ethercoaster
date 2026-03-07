@@ -2,6 +2,7 @@ defmodule EthercoasterWeb.ServiceLive do
   use EthercoasterWeb, :live_view
 
   alias Ethercoaster.Services
+  alias Ethercoaster.Endpoints
   alias Ethercoaster.Service.Manager
 
   defp default_endpoint do
@@ -45,6 +46,7 @@ defmodule EthercoasterWeb.ServiceLive do
       |> assign(:form_error, nil)
       |> assign(:endpoint_status, endpoint_status)
       |> assign(:default_endpoint, default_endpoint())
+      |> assign(:saved_endpoints, Endpoints.list_endpoints())
 
     {:ok, socket}
   end
@@ -89,7 +91,7 @@ defmodule EthercoasterWeb.ServiceLive do
         <input type="checkbox" />
         <div class="collapse-title text-lg font-semibold">Create Service</div>
         <div class="collapse-content">
-          <.live_component module={EthercoasterWeb.ServiceLive.FormComponent} id="service-form" form_error={@form_error} />
+          <.live_component module={EthercoasterWeb.ServiceLive.FormComponent} id="service-form" form_error={@form_error} saved_endpoints={@saved_endpoints} />
         </div>
       </div>
 
@@ -120,6 +122,11 @@ defmodule EthercoasterWeb.ServiceLive do
   # --- Form save ---
 
   def handle_info({:save_service, params}, socket) do
+    # Auto-save manually entered endpoint
+    if params.attrs[:endpoint] && params.attrs.endpoint != "" do
+      Endpoints.ensure_from_url(params.attrs.endpoint)
+    end
+
     case Services.create_service(params.attrs, params.validators) do
       {:ok, service} ->
         if connected?(socket) do
@@ -153,6 +160,7 @@ defmodule EthercoasterWeb.ServiceLive do
           |> assign(:services, services)
           |> assign(:worker_states, worker_states)
           |> assign(:endpoint_status, endpoint_status)
+          |> assign(:saved_endpoints, Endpoints.list_endpoints())
           |> assign(:form_error, nil)
           |> put_flash(:info, "Service created")
 
