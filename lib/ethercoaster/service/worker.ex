@@ -76,13 +76,13 @@ defmodule Ethercoaster.Service.Worker do
         }
 
         state = add_log(state, "Started — #{length(work_queue)} items to fetch")
-        broadcast(state, :status_change, :running)
+        broadcast_state(state, :status_change)
         send(self(), :process_batch)
         {:noreply, state}
 
       {:error, reason} ->
         state = add_log(state, "Failed to start: #{reason}")
-        broadcast(state, :status_change, :error)
+        broadcast_state(state, :status_change)
         {:stop, :normal, state}
     end
   end
@@ -113,7 +113,7 @@ defmodule Ethercoaster.Service.Worker do
   def handle_info(:process_batch, %{paused: true} = state) do
     state = %{state | status: :paused}
     state = add_log(state, "Paused")
-    broadcast(state, :status_change, :paused)
+    broadcast_state(state, :status_change)
     {:stop, :normal, state}
   end
 
@@ -121,7 +121,7 @@ defmodule Ethercoaster.Service.Worker do
     Services.update_service_status(state.service_id, "completed")
     state = %{state | status: :completed}
     state = add_log(state, "Completed")
-    broadcast(state, :status_change, :completed)
+    broadcast_state(state, :status_change)
     {:stop, :normal, state}
   end
 
@@ -132,7 +132,7 @@ defmodule Ethercoaster.Service.Worker do
     {batch, rest} = Enum.split(state.work_queue, state.batch_size)
     state = %{state | work_queue: rest, batch_started_at: now_utc}
 
-    broadcast(state, :batch_started, %{batch_started_at: now_utc})
+    broadcast_state(state, :batch_started)
 
     # Group batch items by {validator_id, category}
     groups = Enum.group_by(batch, fn {validator, _epoch, category} -> {validator.id, category} end)
@@ -165,14 +165,7 @@ defmodule Ethercoaster.Service.Worker do
 
     log_msg = "Batch: #{completed_count} items (#{succeeded} ok, #{failed} failed) — #{state.epochs_completed}/#{state.epochs_total} [#{format_ms(batch_ms)}]"
     state = add_log(state, log_msg)
-    broadcast(state, :progress, %{
-      epochs_completed: state.epochs_completed,
-      epochs_total: state.epochs_total,
-      log_entry: log_msg,
-      last_batch_ms: batch_ms,
-      avg_batch_ms: avg_batch_ms(batch_times),
-      batch_started_at: nil
-    })
+    broadcast_state(state, :progress)
 
     send(self(), :process_batch)
     {:noreply, state}
@@ -306,11 +299,24 @@ defmodule Ethercoaster.Service.Worker do
     |> Keyword.get(:batch_size, 50)
   end
 
-  defp broadcast(state, event, payload) do
+  defp state_snapshot(state) do
+    %{
+      service_id: state.service_id,
+      status: state.status,
+      epochs_completed: state.epochs_completed,
+      epochs_total: state.epochs_total,
+      log: Enum.reverse(state.log),
+      last_batch_ms: state.last_batch_ms,
+      avg_batch_ms: avg_batch_ms(state.batch_times),
+      batch_started_at: state.batch_started_at
+    }
+  end
+
+  defp broadcast_state(state, event) do
     Phoenix.PubSub.broadcast(
       Ethercoaster.PubSub,
       "service:#{state.service_id}",
-      {event, payload}
+      {event, state_snapshot(state)}
     )
   end
 end

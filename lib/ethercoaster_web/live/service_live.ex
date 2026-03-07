@@ -179,45 +179,29 @@ defmodule EthercoasterWeb.ServiceLive do
 
   # --- PubSub handlers ---
 
-  def handle_info({:status_change, _status}, socket) do
+  def handle_info({:status_change, snapshot}, socket) do
     services = Services.list_services()
-    worker_states = refresh_worker_states(socket, services)
+    worker_states = update_worker_state(socket.assigns.worker_states, snapshot)
     {:noreply, assign(socket, services: services, worker_states: worker_states)}
   end
 
-  def handle_info({:batch_started, _payload}, socket) do
-    {:noreply, assign(socket, :worker_states, refresh_worker_states(socket))}
+  def handle_info({:batch_started, snapshot}, socket) do
+    {:noreply, assign(socket, :worker_states, update_worker_state(socket.assigns.worker_states, snapshot))}
   end
 
-  def handle_info({:progress, _payload}, socket) do
-    {:noreply, assign(socket, :worker_states, refresh_worker_states(socket))}
+  def handle_info({:progress, snapshot}, socket) do
+    {:noreply, assign(socket, :worker_states, update_worker_state(socket.assigns.worker_states, snapshot))}
   end
 
-  defp refresh_worker_states(socket, services \\ nil) do
-    services = services || socket.assigns.services
+  defp update_worker_state(worker_states, snapshot) do
+    prev = Map.get(worker_states, snapshot.service_id)
 
-    Enum.reduce(services, socket.assigns.worker_states, fn service, acc ->
-      prev = Map.get(acc, service.id)
-
-      # Don't overwrite a locally-set :paused status while worker finishes its batch
-      if prev && prev.status == :paused do
-        acc
-      else
-        case Manager.get_worker_state(service.id) do
-          nil ->
-            fallback = %{
-              status: String.to_atom(service.status),
-              epochs_completed: 0,
-              epochs_total: 0,
-              log: []
-            }
-            Map.put_new(acc, service.id, prev || fallback)
-
-          ws ->
-            Map.put(acc, service.id, ws)
-        end
-      end
-    end)
+    # Don't overwrite a locally-set :paused status while worker finishes its batch
+    if prev && prev.status == :paused do
+      worker_states
+    else
+      Map.put(worker_states, snapshot.service_id, snapshot)
+    end
   end
 
   # --- User actions ---
