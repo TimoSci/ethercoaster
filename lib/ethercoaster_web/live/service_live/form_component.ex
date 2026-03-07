@@ -43,7 +43,13 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
         validators =
           case service.validators do
             [] -> [""]
-            vals -> Enum.map(vals, fn v -> if v.public_key =~ ~r/\A0x/, do: v.public_key, else: Integer.to_string(v.index) end)
+            vals -> Enum.map(vals, fn v ->
+              cond do
+                is_binary(v.public_key) and v.public_key != "" -> v.public_key
+                is_integer(v.index) -> Integer.to_string(v.index)
+                true -> ""
+              end
+            end)
           end
 
         socket =
@@ -136,17 +142,14 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     {:noreply, assign(socket, :show_picker, !socket.assigns.show_picker)}
   end
 
-  def handle_event("pick_validator", %{"value" => value}, socket) do
+  def handle_event("pick_validator", %{"validator" => value}, socket) do
     existing = Enum.reject(socket.assigns.validators, &(&1 == ""))
 
-    unless value in existing do
-      validators = (existing ++ [value]) |> Enum.uniq()
-      validators = if validators == [], do: [""], else: validators
-
-      # Advance offset to replace the picked validator with the next one
-      {:noreply, assign(socket, validators: validators, picker_offset: socket.assigns.picker_offset + 1)}
-    else
+    if value in existing do
       {:noreply, socket}
+    else
+      validators = existing ++ [value]
+      {:noreply, assign(socket, validators: validators)}
     end
   end
 
@@ -218,20 +221,22 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
   defp validator_label(v) do
     cond do
-      v.public_key && v.public_key != "" -> v.public_key
-      v.index -> Integer.to_string(v.index)
+      is_binary(v.public_key) and v.public_key != "" -> v.public_key
+      is_integer(v.index) -> Integer.to_string(v.index)
       true -> "?"
     end
   end
 
   defp display_short(v) do
     cond do
-      v.public_key && String.starts_with?(v.public_key, "0x") ->
+      is_binary(v.public_key) and String.starts_with?(v.public_key, "0x") ->
         String.slice(v.public_key, 0, 10) <> "…" <> String.slice(v.public_key, -6, 6)
-      v.public_key && v.public_key != "" ->
+      is_binary(v.public_key) and v.public_key != "" ->
         v.public_key
-      true ->
+      is_integer(v.index) ->
         "index: #{v.index}"
+      true ->
+        "?"
     end
   end
 
@@ -313,7 +318,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
                   <button
                     type="button"
                     phx-click="pick_validator"
-                    phx-value-value={validator_label(v)}
+                    phx-value-validator={validator_label(v)}
                     phx-target={@myself}
                     class="btn btn-ghost btn-xs text-success"
                     title="Add to service"

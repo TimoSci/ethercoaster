@@ -428,10 +428,15 @@ defmodule EthercoasterWeb.ValidatorsLive do
   end
 
   defp display_validator(v) do
-    if v.public_key =~ ~r/\A0x/ do
-      String.slice(v.public_key, 0, 10) <> "…" <> String.slice(v.public_key, -6, 6)
-    else
-      "#{v.index}"
+    cond do
+      is_binary(v.public_key) and String.starts_with?(v.public_key, "0x") ->
+        String.slice(v.public_key, 0, 10) <> "…" <> String.slice(v.public_key, -6, 6)
+      is_binary(v.public_key) and v.public_key != "" ->
+        v.public_key
+      is_integer(v.index) ->
+        "#{v.index}"
+      true ->
+        "?"
     end
   end
 
