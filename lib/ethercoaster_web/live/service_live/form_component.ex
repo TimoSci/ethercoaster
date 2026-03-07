@@ -234,7 +234,12 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
         </div>
 
         <div>
-          <label class="label">Transaction Categories</label>
+          <label class="label">
+            Transaction Categories
+            <.link navigate={~p"/transaction_types"} class="ml-1 opacity-60 hover:opacity-100">
+              <.icon name="hero-information-circle" class="size-4" />
+            </.link>
+          </label>
           <div class="flex flex-wrap gap-4">
             <label class="label cursor-pointer gap-2">
               <input type="checkbox" checked disabled class="checkbox checkbox-primary" />
