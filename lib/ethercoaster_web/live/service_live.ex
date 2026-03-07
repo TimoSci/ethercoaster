@@ -181,26 +181,7 @@ defmodule EthercoasterWeb.ServiceLive do
 
   def handle_info({:status_change, _status}, socket) do
     services = Services.list_services()
-
-    worker_states =
-      Map.new(services, fn service ->
-        case Manager.get_worker_state(service.id) do
-          nil ->
-            prev =
-              Map.get(socket.assigns.worker_states, service.id, %{
-                status: String.to_atom(service.status),
-                epochs_completed: 0,
-                epochs_total: 0,
-                log: []
-              })
-
-            {service.id, prev}
-
-          ws ->
-            {service.id, ws}
-        end
-      end)
-
+    worker_states = refresh_worker_states(socket, services)
     {:noreply, assign(socket, services: services, worker_states: worker_states)}
   end
 
@@ -212,8 +193,10 @@ defmodule EthercoasterWeb.ServiceLive do
     {:noreply, assign(socket, :worker_states, refresh_worker_states(socket))}
   end
 
-  defp refresh_worker_states(socket) do
-    Enum.reduce(socket.assigns.services, socket.assigns.worker_states, fn service, acc ->
+  defp refresh_worker_states(socket, services \\ nil) do
+    services = services || socket.assigns.services
+
+    Enum.reduce(services, socket.assigns.worker_states, fn service, acc ->
       prev = Map.get(acc, service.id)
 
       # Don't overwrite a locally-set :paused status while worker finishes its batch
@@ -221,8 +204,17 @@ defmodule EthercoasterWeb.ServiceLive do
         acc
       else
         case Manager.get_worker_state(service.id) do
-          nil -> acc
-          ws -> Map.put(acc, service.id, ws)
+          nil ->
+            fallback = %{
+              status: String.to_atom(service.status),
+              epochs_completed: 0,
+              epochs_total: 0,
+              log: []
+            }
+            Map.put_new(acc, service.id, prev || fallback)
+
+          ws ->
+            Map.put(acc, service.id, ws)
         end
       end
     end)
