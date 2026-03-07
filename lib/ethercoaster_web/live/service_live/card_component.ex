@@ -43,6 +43,9 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
           >
             <.icon name="hero-pause" class="size-4" />
           </button>
+          <.link navigate={~p"/services/#{@service.id}/edit"} class="btn btn-ghost btn-sm">
+            <.icon name="hero-pencil-square" class="size-4" />
+          </.link>
           <button
             phx-click="delete_service"
             phx-value-id={@service.id}

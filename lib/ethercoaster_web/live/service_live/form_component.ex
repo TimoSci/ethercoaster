@@ -16,6 +16,9 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
       |> assign(:endpoint, "")
       |> assign(:categories, ["attestation"])
       |> assign(:upload_error, nil)
+      |> assign(:mode, :create)
+      |> assign(:service, nil)
+      |> assign(:initialized, false)
       |> allow_upload(:validator_file, accept: ~w(.csv .json), max_entries: 1)
 
     {:ok, socket}
@@ -23,7 +26,39 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
   @impl true
   def update(assigns, socket) do
-    {:ok, assign(socket, :form_error, assigns[:form_error])}
+    socket = assign(socket, :form_error, assigns[:form_error])
+
+    # On first update, populate fields from service if editing
+    if not socket.assigns.initialized do
+      mode = assigns[:mode] || :create
+      service = assigns[:service]
+      socket = assign(socket, mode: mode, service: service, initialized: true)
+
+      if mode == :edit and service do
+        validators =
+          case service.validators do
+            [] -> [""]
+            vals -> Enum.map(vals, fn v -> if v.public_key =~ ~r/\A0x/, do: v.public_key, else: Integer.to_string(v.index) end)
+          end
+
+        socket =
+          socket
+          |> assign(:name, service.name || "")
+          |> assign(:query_mode, service.query_mode)
+          |> assign(:last_n_epochs, if(service.last_n_epochs, do: Integer.to_string(service.last_n_epochs), else: ""))
+          |> assign(:epoch_from, if(service.epoch_from, do: Integer.to_string(service.epoch_from), else: ""))
+          |> assign(:epoch_to, if(service.epoch_to, do: Integer.to_string(service.epoch_to), else: ""))
+          |> assign(:endpoint, service.endpoint || "")
+          |> assign(:categories, service.categories)
+          |> assign(:validators, validators)
+
+        {:ok, socket}
+      else
+        {:ok, socket}
+      end
+    else
+      {:ok, socket}
+    end
   end
 
   @impl true
@@ -51,7 +86,13 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
   end
 
   def handle_event("save", _params, socket) do
-    send(self(), {:save_service, build_service_params(socket)})
+    params = build_service_params(socket)
+
+    case socket.assigns.mode do
+      :create -> send(self(), {:save_service, params})
+      :edit -> send(self(), {:update_service, socket.assigns.service.id, params})
+    end
+
     {:noreply, socket}
   end
 
@@ -141,6 +182,9 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
   @impl true
   def render(assigns) do
+    save_label = if assigns.mode == :edit, do: "Update Service", else: "Save Service"
+    assigns = assign(assigns, :save_label, save_label)
+
     ~H"""
     <div>
       <form phx-submit="save" phx-target={@myself} class="space-y-4">
@@ -293,7 +337,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
         </div>
 
         <button type="submit" class="btn btn-primary">
-          <.icon name="hero-bookmark" class="size-5" /> Save Service
+          <.icon name="hero-bookmark" class="size-5" /> {@save_label}
         </button>
       </form>
 

@@ -45,6 +45,26 @@ defmodule Ethercoaster.Services do
     |> Repo.update!()
   end
 
+  def update_service(service, attrs, validator_inputs) do
+    Repo.transaction(fn ->
+      changeset = Service.changeset(service, attrs)
+
+      case Repo.update(changeset) do
+        {:ok, service} ->
+          validator_records = resolve_validators(validator_inputs)
+
+          service
+          |> Repo.preload(:validators)
+          |> Ecto.Changeset.change()
+          |> Ecto.Changeset.put_assoc(:validators, validator_records)
+          |> Repo.update!()
+
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
+  end
+
   def delete_service(id) do
     Service
     |> Repo.get!(id)
