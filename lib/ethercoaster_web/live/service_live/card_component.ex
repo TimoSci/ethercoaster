@@ -54,6 +54,10 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
         </div>
       </div>
 
+      <div class="text-sm mb-2">
+        <span class={endpoint_color(@endpoint_status)}>{@endpoint_url}</span>
+      </div>
+
       <div class="text-sm opacity-70 mb-2">
         <span>{length(@service.validators)} validator(s)</span>
         <span class="mx-1">&middot;</span>
@@ -82,6 +86,10 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
     </div>
     """
   end
+
+  defp endpoint_color(:ok), do: "text-success"
+  defp endpoint_color(:error), do: "text-error"
+  defp endpoint_color(_), do: "opacity-50"
 
   defp status_badge(assigns) do
     {color, label} =

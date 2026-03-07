@@ -4,6 +4,15 @@ defmodule EthercoasterWeb.ServiceLive do
   alias Ethercoaster.Services
   alias Ethercoaster.Service.Manager
 
+  defp default_endpoint do
+    Application.get_env(:ethercoaster, Ethercoaster.BeaconChain, [])
+    |> Keyword.get(:base_url, "http://localhost:5052")
+  end
+
+  defp effective_endpoint(service) do
+    service.endpoint || default_endpoint()
+  end
+
   @impl true
   def mount(_params, _session, socket) do
     services = Services.list_services()
@@ -12,6 +21,8 @@ defmodule EthercoasterWeb.ServiceLive do
       for service <- services do
         Phoenix.PubSub.subscribe(Ethercoaster.PubSub, "service:#{service.id}")
       end
+
+      check_all_endpoints(services)
     end
 
     worker_states =
@@ -24,13 +35,45 @@ defmodule EthercoasterWeb.ServiceLive do
         end
       end)
 
+    # endpoint_status: %{service_id => :ok | :error | :checking}
+    endpoint_status = Map.new(services, fn s -> {s.id, :checking} end)
+
     socket =
       socket
       |> assign(:services, services)
       |> assign(:worker_states, worker_states)
       |> assign(:form_error, nil)
+      |> assign(:endpoint_status, endpoint_status)
+      |> assign(:default_endpoint, default_endpoint())
 
     {:ok, socket}
+  end
+
+  defp check_all_endpoints(services) do
+    lv = self()
+
+    for service <- services do
+      endpoint = effective_endpoint(service)
+      service_id = service.id
+
+      Task.start(fn ->
+        result = check_endpoint(endpoint)
+        send(lv, {:endpoint_check, service_id, result})
+      end)
+    end
+  end
+
+  defp check_endpoint(base_url) do
+    try do
+      req = Req.new(base_url: base_url, receive_timeout: 5_000, finch: Ethercoaster.Finch)
+
+      case Req.get(req, url: "/eth/v1/node/syncing") do
+        {:ok, %Req.Response{status: status}} when status in 200..299 -> :ok
+        _ -> :error
+      end
+    rescue
+      _ -> :error
+    end
   end
 
   @impl true
@@ -54,6 +97,8 @@ defmodule EthercoasterWeb.ServiceLive do
             id={"card-#{service.id}"}
             service={service}
             worker_state={Map.get(@worker_states, service.id)}
+            endpoint_url={service.endpoint || @default_endpoint}
+            endpoint_status={Map.get(@endpoint_status, service.id, :checking)}
           />
         </div>
       </div>
@@ -61,9 +106,16 @@ defmodule EthercoasterWeb.ServiceLive do
     """
   end
 
-  # --- Form save ---
+  # --- Endpoint checks ---
 
   @impl true
+  def handle_info({:endpoint_check, service_id, result}, socket) do
+    endpoint_status = Map.put(socket.assigns.endpoint_status, service_id, result)
+    {:noreply, assign(socket, :endpoint_status, endpoint_status)}
+  end
+
+  # --- Form save ---
+
   def handle_info({:save_service, params}, socket) do
     case Services.create_service(params.attrs, params.validators) do
       {:ok, service} ->
@@ -81,10 +133,23 @@ defmodule EthercoasterWeb.ServiceLive do
             log: []
           })
 
+        endpoint_status = Map.put(socket.assigns.endpoint_status, service.id, :checking)
+
+        if connected?(socket) do
+          endpoint = effective_endpoint(service)
+          sid = service.id
+          lv = self()
+          Task.start(fn ->
+            result = check_endpoint(endpoint)
+            send(lv, {:endpoint_check, sid, result})
+          end)
+        end
+
         socket =
           socket
           |> assign(:services, services)
           |> assign(:worker_states, worker_states)
+          |> assign(:endpoint_status, endpoint_status)
           |> assign(:form_error, nil)
           |> put_flash(:info, "Service created")
 
