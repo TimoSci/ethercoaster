@@ -11,6 +11,12 @@ defmodule Ethercoaster.Validators do
     |> Repo.all()
   end
 
+  def list_validators_by_index do
+    ValidatorRecord
+    |> order_by([v], asc: v.index)
+    |> Repo.all()
+  end
+
   def get_validator!(id), do: Repo.get!(ValidatorRecord, id)
 
   def create_validator(attrs) do

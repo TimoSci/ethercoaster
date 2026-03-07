@@ -23,6 +23,7 @@ defmodule EthercoasterWeb.Router do
     post "/validator/query", ValidatorController, :query
 
     live "/services", ServiceLive
+    live "/services/progress_map", ProgressMapLive
     live "/services/:id/edit", ServiceEditLive
     live "/transaction_types", TransactionTypesLive
     live "/endpoints", EndpointsLive
