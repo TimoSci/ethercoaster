@@ -20,6 +20,8 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
       |> assign(:mode, :create)
       |> assign(:service, nil)
       |> assign(:initialized, false)
+      |> assign(:show_picker, false)
+      |> assign(:picker_offset, 0)
       |> allow_upload(:validator_file, accept: ~w(.csv .json), max_entries: 1)
 
     {:ok, socket}
@@ -29,6 +31,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
   def update(assigns, socket) do
     socket = assign(socket, :form_error, assigns[:form_error])
     socket = assign(socket, :saved_endpoints, assigns[:saved_endpoints] || [])
+    socket = assign(socket, :saved_validators, assigns[:saved_validators] || [])
 
     # On first update, populate fields from service if editing
     if not socket.assigns.initialized do
@@ -129,6 +132,33 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     end
   end
 
+  def handle_event("toggle_picker", _, socket) do
+    {:noreply, assign(socket, :show_picker, !socket.assigns.show_picker)}
+  end
+
+  def handle_event("pick_validator", %{"value" => value}, socket) do
+    existing = Enum.reject(socket.assigns.validators, &(&1 == ""))
+
+    unless value in existing do
+      validators = (existing ++ [value]) |> Enum.uniq()
+      validators = if validators == [], do: [""], else: validators
+
+      # Advance offset to replace the picked validator with the next one
+      {:noreply, assign(socket, validators: validators, picker_offset: socket.assigns.picker_offset + 1)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("picker_prev", _, socket) do
+    offset = max(socket.assigns.picker_offset - 5, 0)
+    {:noreply, assign(socket, :picker_offset, offset)}
+  end
+
+  def handle_event("picker_next", _, socket) do
+    {:noreply, assign(socket, :picker_offset, socket.assigns.picker_offset + 5)}
+  end
+
   defp build_service_params(socket) do
     a = socket.assigns
     validators = Enum.reject(a.validators, &(&1 == ""))
@@ -160,6 +190,51 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
   defp parse_int_or_nil(n) when is_integer(n), do: n
   defp parse_int_or_nil(_), do: nil
 
+  @picker_size 5
+
+  defp picker_validators(saved_validators, already_added, offset) do
+    already_set = MapSet.new(already_added, &String.trim/1)
+
+    available =
+      Enum.reject(saved_validators, fn v ->
+        label = validator_label(v)
+        MapSet.member?(already_set, label)
+      end)
+
+    Enum.slice(available, offset, @picker_size)
+  end
+
+  defp picker_has_more?(saved_validators, already_added, offset) do
+    already_set = MapSet.new(already_added, &String.trim/1)
+
+    available =
+      Enum.reject(saved_validators, fn v ->
+        label = validator_label(v)
+        MapSet.member?(already_set, label)
+      end)
+
+    length(available) > offset + @picker_size
+  end
+
+  defp validator_label(v) do
+    cond do
+      v.public_key && v.public_key != "" -> v.public_key
+      v.index -> Integer.to_string(v.index)
+      true -> "?"
+    end
+  end
+
+  defp display_short(v) do
+    cond do
+      v.public_key && String.starts_with?(v.public_key, "0x") ->
+        String.slice(v.public_key, 0, 10) <> "…" <> String.slice(v.public_key, -6, 6)
+      v.public_key && v.public_key != "" ->
+        v.public_key
+      true ->
+        "index: #{v.index}"
+    end
+  end
+
   @impl true
   def render(assigns) do
     save_label = if assigns.mode == :edit, do: "Update Service", else: "Save Service"
@@ -183,36 +258,95 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
         <div>
           <label class="label">Validators (public key or index)</label>
-          <div class="space-y-2">
-            <div :for={{val, idx} <- Enum.with_index(@validators)} class="flex gap-2">
-              <input
-                type="text"
-                value={val}
-                phx-blur="update_validator"
-                phx-value-index={idx}
-                phx-target={@myself}
-                class="input input-bordered flex-1"
-                placeholder="0x... or validator index"
-              />
+          <div class="flex gap-4">
+            <div class="flex-1">
+              <div class="space-y-2">
+                <div :for={{val, idx} <- Enum.with_index(@validators)} class="flex gap-2">
+                  <input
+                    type="text"
+                    value={val}
+                    phx-blur="update_validator"
+                    phx-value-index={idx}
+                    phx-target={@myself}
+                    class="input input-bordered flex-1"
+                    placeholder="0x... or validator index"
+                  />
+                  <button
+                    type="button"
+                    phx-click="remove_validator"
+                    phx-value-index={idx}
+                    phx-target={@myself}
+                    class="btn btn-ghost btn-sm"
+                  >
+                    <.icon name="hero-x-mark" class="size-4" />
+                  </button>
+                </div>
+              </div>
+              <div class="flex gap-2 mt-2 items-center flex-wrap">
+                <button type="button" phx-click="add_validator" phx-target={@myself} class="btn btn-soft btn-sm">
+                  <.icon name="hero-plus" class="size-4" /> Add Validator
+                </button>
+                <.live_file_input upload={@uploads.validator_file} class="file-input file-input-bordered file-input-sm" />
+                <button type="button" phx-click="upload_validators" phx-target={@myself} class="btn btn-soft btn-sm">Upload</button>
+              </div>
+              <p :if={@upload_error} class="text-error text-sm mt-1">{@upload_error}</p>
+            </div>
+
+            <div :if={@saved_validators != []} class="w-64 shrink-0">
               <button
                 type="button"
-                phx-click="remove_validator"
-                phx-value-index={idx}
+                phx-click="toggle_picker"
                 phx-target={@myself}
-                class="btn btn-ghost btn-sm"
+                class="btn btn-soft btn-sm mb-2 w-full"
               >
-                <.icon name="hero-x-mark" class="size-4" />
+                <.icon name={if @show_picker, do: "hero-chevron-up", else: "hero-chevron-down"} class="size-4" />
+                Saved Validators
               </button>
+              <div :if={@show_picker} class="bg-base-300 rounded-lg p-2 space-y-1">
+                <div
+                  :for={v <- picker_validators(@saved_validators, @validators, @picker_offset)}
+                  class="flex items-center justify-between bg-base-100 rounded px-2 py-1"
+                >
+                  <span class="font-mono text-sm truncate" title={validator_label(v)}>
+                    {display_short(v)}
+                  </span>
+                  <button
+                    type="button"
+                    phx-click="pick_validator"
+                    phx-value-value={validator_label(v)}
+                    phx-target={@myself}
+                    class="btn btn-ghost btn-xs text-success"
+                    title="Add to service"
+                  >
+                    <.icon name="hero-arrow-left" class="size-4" />
+                  </button>
+                </div>
+                <div :if={picker_validators(@saved_validators, @validators, @picker_offset) == []} class="text-xs opacity-50 text-center py-2">
+                  All validators already added.
+                </div>
+                <div class="flex justify-between mt-1">
+                  <button
+                    type="button"
+                    phx-click="picker_prev"
+                    phx-target={@myself}
+                    class="btn btn-ghost btn-xs"
+                    disabled={@picker_offset == 0}
+                  >
+                    <.icon name="hero-chevron-up" class="size-3" /> Prev
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="picker_next"
+                    phx-target={@myself}
+                    class="btn btn-ghost btn-xs"
+                    disabled={not picker_has_more?(@saved_validators, @validators, @picker_offset)}
+                  >
+                    Next <.icon name="hero-chevron-down" class="size-3" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="flex gap-2 mt-2 items-center flex-wrap">
-            <button type="button" phx-click="add_validator" phx-target={@myself} class="btn btn-soft btn-sm">
-              <.icon name="hero-plus" class="size-4" /> Add Validator
-            </button>
-            <.live_file_input upload={@uploads.validator_file} class="file-input file-input-bordered file-input-sm" />
-            <button type="button" phx-click="upload_validators" phx-target={@myself} class="btn btn-soft btn-sm">Upload</button>
-          </div>
-          <p :if={@upload_error} class="text-error text-sm mt-1">{@upload_error}</p>
         </div>
 
         <div>

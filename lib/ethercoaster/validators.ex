@@ -112,7 +112,7 @@ defmodule Ethercoaster.Validators do
               record
 
             nil ->
-              Repo.insert!(%ValidatorRecord{public_key: input, index: 0},
+              Repo.insert!(%ValidatorRecord{public_key: input, index: nil},
                 on_conflict: :nothing,
                 conflict_target: :public_key
               )
@@ -128,7 +128,7 @@ defmodule Ethercoaster.Validators do
               record
 
             nil ->
-              Repo.insert!(%ValidatorRecord{public_key: "unresolved:#{index}", index: index},
+              Repo.insert!(%ValidatorRecord{public_key: nil, index: index},
                 on_conflict: :nothing,
                 conflict_target: :index
               )

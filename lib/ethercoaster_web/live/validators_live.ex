@@ -243,8 +243,10 @@ defmodule EthercoasterWeb.ValidatorsLive do
 
   @impl true
   def handle_event("save", %{"public_key" => public_key, "index" => index}, socket) do
+    public_key = String.trim(public_key)
+
     attrs = %{
-      public_key: String.trim(public_key),
+      public_key: if(public_key != "", do: public_key, else: nil),
       index: parse_int(index)
     }
 

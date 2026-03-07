@@ -3,6 +3,7 @@ defmodule EthercoasterWeb.ServiceLive do
 
   alias Ethercoaster.Services
   alias Ethercoaster.Endpoints
+  alias Ethercoaster.Validators
   alias Ethercoaster.Service.Manager
 
   defp default_endpoint do
@@ -47,6 +48,7 @@ defmodule EthercoasterWeb.ServiceLive do
       |> assign(:endpoint_status, endpoint_status)
       |> assign(:default_endpoint, default_endpoint())
       |> assign(:saved_endpoints, Endpoints.list_endpoints())
+      |> assign(:saved_validators, Validators.list_validators_by_index())
 
     {:ok, socket}
   end
@@ -91,7 +93,7 @@ defmodule EthercoasterWeb.ServiceLive do
         <input type="checkbox" />
         <div class="collapse-title text-lg font-semibold">Create Service</div>
         <div class="collapse-content">
-          <.live_component module={EthercoasterWeb.ServiceLive.FormComponent} id="service-form" form_error={@form_error} saved_endpoints={@saved_endpoints} />
+          <.live_component module={EthercoasterWeb.ServiceLive.FormComponent} id="service-form" form_error={@form_error} saved_endpoints={@saved_endpoints} saved_validators={@saved_validators} />
         </div>
       </div>
 

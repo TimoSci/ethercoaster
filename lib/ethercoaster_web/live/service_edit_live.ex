@@ -3,6 +3,7 @@ defmodule EthercoasterWeb.ServiceEditLive do
 
   alias Ethercoaster.Services
   alias Ethercoaster.Endpoints
+  alias Ethercoaster.Validators
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -13,6 +14,7 @@ defmodule EthercoasterWeb.ServiceEditLive do
       |> assign(:service, service)
       |> assign(:form_error, nil)
       |> assign(:saved_endpoints, Endpoints.list_endpoints())
+      |> assign(:saved_validators, Validators.list_validators_by_index())
 
     {:ok, socket}
   end
@@ -38,6 +40,7 @@ defmodule EthercoasterWeb.ServiceEditLive do
           service={@service}
           form_error={@form_error}
           saved_endpoints={@saved_endpoints}
+          saved_validators={@saved_validators}
         />
       </div>
     </div>

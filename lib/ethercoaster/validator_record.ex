@@ -20,8 +20,30 @@ defmodule Ethercoaster.ValidatorRecord do
   def changeset(validator, attrs) do
     validator
     |> cast(attrs, [:public_key, :index])
-    |> validate_required([:public_key, :index])
+    |> normalize_blanks()
+    |> validate_at_least_one()
     |> unique_constraint(:public_key)
     |> unique_constraint(:index)
+  end
+
+  defp normalize_blanks(changeset) do
+    changeset
+    |> then(fn cs ->
+      case get_field(cs, :public_key) do
+        "" -> put_change(cs, :public_key, nil)
+        _ -> cs
+      end
+    end)
+  end
+
+  defp validate_at_least_one(changeset) do
+    public_key = get_field(changeset, :public_key)
+    index = get_field(changeset, :index)
+
+    if (is_nil(public_key) or public_key == "") and is_nil(index) do
+      add_error(changeset, :public_key, "either public key or index is required")
+    else
+      changeset
+    end
   end
 end
