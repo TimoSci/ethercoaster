@@ -7,7 +7,6 @@ defmodule Ethercoaster.Service.Worker do
   alias Ethercoaster.Validator.Cache
   alias Ethercoaster.BeaconChain.{Beacon, Node}
 
-  @batch_size 50
   @slots_per_epoch 32
   @max_log_entries 50
 
@@ -38,7 +37,11 @@ defmodule Ethercoaster.Service.Worker do
       paused: false,
       genesis_time: nil,
       endpoint: nil,
-      categories: []
+      categories: [],
+      batch_size: default_batch_size(),
+      last_batch_ms: nil,
+      batch_times: [],
+      batch_started_at: nil
     }
 
     {:ok, state, {:continue, :setup}}
@@ -58,6 +61,8 @@ defmodule Ethercoaster.Service.Worker do
         total = length(Enum.to_list(from_epoch..to_epoch)) * length(validators) * length(categories)
         completed = total - length(work_queue)
 
+        batch_size = service.batch_size || default_batch_size()
+
         state = %{state |
           status: :running,
           validators: validators,
@@ -66,7 +71,8 @@ defmodule Ethercoaster.Service.Worker do
           epochs_total: total,
           genesis_time: genesis_time,
           endpoint: service.endpoint,
-          categories: categories
+          categories: categories,
+          batch_size: batch_size
         }
 
         state = add_log(state, "Started — #{length(work_queue)} items to fetch")
@@ -95,7 +101,10 @@ defmodule Ethercoaster.Service.Worker do
       status: state.status,
       epochs_completed: state.epochs_completed,
       epochs_total: state.epochs_total,
-      log: Enum.reverse(state.log)
+      log: Enum.reverse(state.log),
+      last_batch_ms: state.last_batch_ms,
+      avg_batch_ms: avg_batch_ms(state.batch_times),
+      batch_started_at: state.batch_started_at
     }
     {:reply, reply, state}
   end
@@ -117,8 +126,13 @@ defmodule Ethercoaster.Service.Worker do
   end
 
   def handle_info(:process_batch, state) do
-    {batch, rest} = Enum.split(state.work_queue, @batch_size)
-    state = %{state | work_queue: rest}
+    batch_start = System.monotonic_time(:millisecond)
+    now_utc = DateTime.utc_now() |> DateTime.to_unix(:millisecond)
+
+    {batch, rest} = Enum.split(state.work_queue, state.batch_size)
+    state = %{state | work_queue: rest, batch_started_at: now_utc}
+
+    broadcast(state, :batch_started, %{batch_started_at: now_utc})
 
     # Group batch items by {validator_id, category}
     groups = Enum.group_by(batch, fn {validator, _epoch, category} -> {validator.id, category} end)
@@ -135,18 +149,29 @@ defmodule Ethercoaster.Service.Worker do
 
     results = Task.await_many(tasks, 120_000)
 
+    batch_ms = System.monotonic_time(:millisecond) - batch_start
+    batch_times = Enum.take([batch_ms | state.batch_times], 20)
+
     completed_count = length(batch)
-    state = %{state | epochs_completed: state.epochs_completed + completed_count}
+    state = %{state |
+      epochs_completed: state.epochs_completed + completed_count,
+      last_batch_ms: batch_ms,
+      batch_times: batch_times,
+      batch_started_at: nil
+    }
 
     succeeded = Enum.count(results, &(&1 == :ok))
     failed = length(results) - succeeded
 
-    log_msg = "Batch: #{completed_count} items (#{succeeded} ok, #{failed} failed) — #{state.epochs_completed}/#{state.epochs_total}"
+    log_msg = "Batch: #{completed_count} items (#{succeeded} ok, #{failed} failed) — #{state.epochs_completed}/#{state.epochs_total} [#{format_ms(batch_ms)}]"
     state = add_log(state, log_msg)
     broadcast(state, :progress, %{
       epochs_completed: state.epochs_completed,
       epochs_total: state.epochs_total,
-      log_entry: log_msg
+      log_entry: log_msg,
+      last_batch_ms: batch_ms,
+      avg_batch_ms: avg_batch_ms(batch_times),
+      batch_started_at: nil
     })
 
     send(self(), :process_batch)
@@ -268,6 +293,17 @@ defmodule Ethercoaster.Service.Worker do
     entry = "[#{timestamp}] #{message}"
     log = Enum.take([entry | state.log], @max_log_entries)
     %{state | log: log}
+  end
+
+  defp avg_batch_ms([]), do: nil
+  defp avg_batch_ms(times), do: round(Enum.sum(times) / length(times))
+
+  defp format_ms(ms) when ms < 1000, do: "#{ms}ms"
+  defp format_ms(ms), do: "#{Float.round(ms / 1000, 1)}s"
+
+  defp default_batch_size do
+    Application.get_env(:ethercoaster, Ethercoaster.BeaconChain, [])
+    |> Keyword.get(:batch_size, 50)
   end
 
   defp broadcast(state, event, payload) do

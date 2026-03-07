@@ -26,6 +26,34 @@ import {hooks as colocatedHooks} from "phoenix-colocated/ethercoaster"
 import topbar from "../vendor/topbar"
 
 let Hooks = {}
+Hooks.BatchTimer = {
+  mounted() {
+    this.startTimer()
+  },
+  updated() {
+    this.stopTimer()
+    this.startTimer()
+  },
+  destroyed() {
+    this.stopTimer()
+  },
+  startTimer() {
+    const startedAt = parseInt(this.el.dataset.startedAt)
+    if (!startedAt) return
+    this.interval = setInterval(() => {
+      const elapsed = Date.now() - startedAt
+      const seconds = (elapsed / 1000).toFixed(1)
+      this.el.textContent = seconds + "s"
+    }, 100)
+  },
+  stopTimer() {
+    if (this.interval) {
+      clearInterval(this.interval)
+      this.interval = null
+    }
+  }
+}
+
 Hooks.ScrollBottom = {
   mounted() {
     this.el.scrollTop = this.el.scrollHeight

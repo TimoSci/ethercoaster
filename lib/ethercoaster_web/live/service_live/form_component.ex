@@ -14,6 +14,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
       |> assign(:date_from, "")
       |> assign(:date_to, "")
       |> assign(:endpoint, "")
+      |> assign(:batch_size, "")
       |> assign(:categories, ["attestation"])
       |> assign(:upload_error, nil)
       |> assign(:mode, :create)
@@ -50,6 +51,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
           |> assign(:epoch_from, if(service.epoch_from, do: Integer.to_string(service.epoch_from), else: ""))
           |> assign(:epoch_to, if(service.epoch_to, do: Integer.to_string(service.epoch_to), else: ""))
           |> assign(:endpoint, service.endpoint || "")
+          |> assign(:batch_size, if(service.batch_size, do: Integer.to_string(service.batch_size), else: ""))
           |> assign(:categories, service.categories)
           |> assign(:validators, validators)
 
@@ -167,6 +169,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
         epoch_from: parse_int_or_nil(a.epoch_from),
         epoch_to: parse_int_or_nil(a.epoch_to),
         endpoint: if(a.endpoint == "", do: nil, else: a.endpoint),
+        batch_size: parse_int_or_nil(a.batch_size),
         categories: a.categories
       },
       validators: validators
@@ -192,7 +195,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
     ~H"""
     <div>
-      <form phx-submit="save" phx-target={@myself} class="space-y-4">
+      <form phx-submit="save" phx-change="validate_upload" phx-target={@myself} class="space-y-4">
         <div>
           <label class="label">Name (optional)</label>
           <input
@@ -234,10 +237,8 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
             <button type="button" phx-click="add_validator" phx-target={@myself} class="btn btn-soft btn-sm">
               <.icon name="hero-plus" class="size-4" /> Add Validator
             </button>
-            <form phx-change="validate_upload" phx-submit="upload_validators" phx-target={@myself} class="flex gap-2 items-center">
-              <.live_file_input upload={@uploads.validator_file} class="file-input file-input-bordered file-input-sm" />
-              <button type="submit" class="btn btn-soft btn-sm">Upload</button>
-            </form>
+            <.live_file_input upload={@uploads.validator_file} class="file-input file-input-bordered file-input-sm" />
+            <button type="button" phx-click="upload_validators" phx-target={@myself} class="btn btn-soft btn-sm">Upload</button>
           </div>
           <p :if={@upload_error} class="text-error text-sm mt-1">{@upload_error}</p>
         </div>
@@ -265,7 +266,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
           </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label class="label">Last N Epochs</label>
             <input
@@ -303,6 +304,19 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
               class="input input-bordered w-full"
               min="0"
               placeholder="99"
+            />
+          </div>
+          <div>
+            <label class="label">Batch Size</label>
+            <input
+              type="number"
+              value={@batch_size}
+              phx-blur="update_field"
+              phx-value-field="batch_size"
+              phx-target={@myself}
+              class="input input-bordered w-full"
+              min="1"
+              placeholder="50"
             />
           </div>
         </div>

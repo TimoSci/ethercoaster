@@ -3,10 +3,14 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
 
   @impl true
   def render(assigns) do
-    status = if assigns.worker_state, do: assigns.worker_state.status, else: :stopped
-    epochs_completed = if assigns.worker_state, do: assigns.worker_state.epochs_completed, else: 0
-    epochs_total = if assigns.worker_state, do: assigns.worker_state.epochs_total, else: 0
-    log = if assigns.worker_state, do: assigns.worker_state.log, else: []
+    ws = assigns.worker_state
+    status = if ws, do: ws.status, else: :stopped
+    epochs_completed = if ws, do: ws.epochs_completed, else: 0
+    epochs_total = if ws, do: ws.epochs_total, else: 0
+    log = if ws, do: ws.log, else: []
+    last_batch_ms = if ws, do: ws[:last_batch_ms], else: nil
+    avg_batch_ms = if ws, do: ws[:avg_batch_ms], else: nil
+    batch_started_at = if ws, do: ws[:batch_started_at], else: nil
     progress_pct = if epochs_total > 0, do: Float.round(epochs_completed / epochs_total * 100, 1), else: 0.0
 
     assigns =
@@ -16,6 +20,9 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
       |> assign(:epochs_total, epochs_total)
       |> assign(:log, log)
       |> assign(:progress_pct, progress_pct)
+      |> assign(:last_batch_ms, last_batch_ms)
+      |> assign(:avg_batch_ms, avg_batch_ms)
+      |> assign(:batch_started_at, batch_started_at)
 
     ~H"""
     <div class="card bg-base-200 p-4">
@@ -78,6 +85,19 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
         <progress class="progress progress-primary w-full" value={@epochs_completed} max={@epochs_total}></progress>
       </div>
 
+      <div :if={@status == :running && (@last_batch_ms || @batch_started_at)} class="flex gap-4 text-xs opacity-70 mb-2">
+        <span :if={@batch_started_at}>
+          Current:
+          <span
+            id={"timer-#{@service.id}"}
+            phx-hook="BatchTimer"
+            data-started-at={@batch_started_at}
+          >0.0s</span>
+        </span>
+        <span :if={@last_batch_ms}>Last: {format_ms(@last_batch_ms)}</span>
+        <span :if={@avg_batch_ms}>Avg: {format_ms(@avg_batch_ms)}</span>
+      </div>
+
       <div
         :if={@log != []}
         class="bg-base-300 rounded p-2 max-h-32 overflow-y-auto text-xs font-mono"
@@ -89,6 +109,10 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
     </div>
     """
   end
+
+  defp format_ms(nil), do: "-"
+  defp format_ms(ms) when ms < 1000, do: "#{ms}ms"
+  defp format_ms(ms), do: "#{Float.round(ms / 1000, 1)}s"
 
   defp endpoint_color(:ok), do: "text-success"
   defp endpoint_color(:error), do: "text-error"

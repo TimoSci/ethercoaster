@@ -66,7 +66,8 @@ config :ethercoaster, Ethercoaster.BeaconChain,
   receive_timeout: 15_000,
   pool_size: 32,
   pool_count: 1,
-  max_concurrency: 48
+  max_concurrency: 48,
+  batch_size: 50
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
