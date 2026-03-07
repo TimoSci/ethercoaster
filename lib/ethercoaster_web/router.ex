@@ -26,6 +26,7 @@ defmodule EthercoasterWeb.Router do
     live "/services/:id/edit", ServiceEditLive
     live "/transaction_types", TransactionTypesLive
     live "/endpoints", EndpointsLive
+    live "/validators", ValidatorsLive
   end
 
   # Other scopes may use custom stacks.

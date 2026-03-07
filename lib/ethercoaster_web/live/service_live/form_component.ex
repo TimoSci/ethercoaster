@@ -111,7 +111,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     uploaded =
       consume_uploaded_entries(socket, :validator_file, fn %{path: path}, entry ->
         content = File.read!(path)
-        {:ok, parse_validator_file(content, entry.client_name)}
+        {:ok, Ethercoaster.ValidatorImport.parse_file(content, entry.client_name)}
       end)
 
     case uploaded do
@@ -126,34 +126,6 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
       _ ->
         {:noreply, socket}
-    end
-  end
-
-  defp parse_validator_file(content, filename) do
-    cond do
-      String.ends_with?(filename, ".json") ->
-        case Jason.decode(content) do
-          {:ok, list} when is_list(list) ->
-            {:ok, Enum.map(list, &to_string/1)}
-
-          {:ok, %{"validators" => list}} when is_list(list) ->
-            {:ok, Enum.map(list, &to_string/1)}
-
-          _ ->
-            {:error, "JSON must be an array of validators or {\"validators\": [...]}"}
-        end
-
-      String.ends_with?(filename, ".csv") ->
-        lines =
-          content
-          |> String.split(["\n", "\r\n"])
-          |> Enum.map(&String.trim/1)
-          |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "#")))
-
-        {:ok, lines}
-
-      true ->
-        {:error, "Unsupported file type"}
     end
   end
 

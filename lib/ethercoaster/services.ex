@@ -3,7 +3,7 @@ defmodule Ethercoaster.Services do
 
   alias Ethercoaster.Repo
   alias Ethercoaster.Service
-  alias Ethercoaster.ValidatorRecord
+  alias Ethercoaster.Validators
 
   def list_services do
     Service
@@ -24,7 +24,7 @@ defmodule Ethercoaster.Services do
 
       case Repo.insert(changeset) do
         {:ok, service} ->
-          validator_records = resolve_validators(validator_inputs)
+          validator_records = Validators.resolve_inputs(validator_inputs)
 
           service
           |> Repo.preload(:validators)
@@ -58,7 +58,7 @@ defmodule Ethercoaster.Services do
 
       case Repo.update(changeset) do
         {:ok, service} ->
-          validator_records = resolve_validators(validator_inputs)
+          validator_records = Validators.resolve_inputs(validator_inputs)
 
           service
           |> Repo.preload(:validators)
@@ -78,45 +78,4 @@ defmodule Ethercoaster.Services do
     |> Repo.delete()
   end
 
-  defp resolve_validators(inputs) do
-    Enum.map(inputs, fn input ->
-      input = String.trim(input)
-
-      cond do
-        String.match?(input, ~r/\A0x[0-9a-fA-F]{96}\z/) ->
-          case Repo.get_by(ValidatorRecord, public_key: input) do
-            %ValidatorRecord{} = record ->
-              record
-
-            nil ->
-              Repo.insert!(%ValidatorRecord{public_key: input, index: 0},
-                on_conflict: :nothing,
-                conflict_target: :public_key
-              )
-
-              Repo.get_by!(ValidatorRecord, public_key: input)
-          end
-
-        String.match?(input, ~r/\A\d+\z/) ->
-          index = String.to_integer(input)
-
-          case Repo.get_by(ValidatorRecord, index: index) do
-            %ValidatorRecord{} = record ->
-              record
-
-            nil ->
-              Repo.insert!(%ValidatorRecord{public_key: "unresolved:#{index}", index: index},
-                on_conflict: :nothing,
-                conflict_target: :index
-              )
-
-              Repo.get_by!(ValidatorRecord, index: index)
-          end
-
-        true ->
-          raise "Invalid validator input: #{input}"
-      end
-    end)
-    |> Enum.uniq_by(& &1.id)
-  end
 end
