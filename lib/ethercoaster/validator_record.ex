@@ -8,6 +8,11 @@ defmodule Ethercoaster.ValidatorRecord do
 
     has_many :transactions, Ethercoaster.Transaction, foreign_key: :validator_id
 
+    many_to_many :groups, Ethercoaster.ValidatorGroup,
+      join_through: "validator_groups_validators",
+      join_keys: [validator_id: :id, validator_group_id: :id],
+      on_replace: :delete
+
     timestamps(type: :utc_datetime)
   end
 

@@ -9,11 +9,16 @@ defmodule EthercoasterWeb.ValidatorsLive do
     socket =
       socket
       |> assign(:validators, Validators.list_validators())
+      |> assign(:groups, Validators.list_groups())
       |> assign(:editing_id, nil)
       |> assign(:form_public_key, "")
       |> assign(:form_index, "")
       |> assign(:form_error, nil)
       |> assign(:upload_error, nil)
+      |> assign(:group_form_error, nil)
+      |> assign(:renaming_group_id, nil)
+      |> assign(:rename_value, "")
+      |> assign(:selected_group_id, nil)
       |> allow_upload(:validator_file, accept: ~w(.csv .json), max_entries: 1)
 
     {:ok, socket}
@@ -24,96 +29,217 @@ defmodule EthercoasterWeb.ValidatorsLive do
     ~H"""
     <.header>
       Validators
-      <:subtitle>Manage saved validator records.</:subtitle>
+      <:subtitle>Manage saved validator records and groups.</:subtitle>
     </.header>
 
-    <div class="mt-6">
-      <div class="card bg-base-200 p-6 mb-6">
-        <h3 class="text-lg font-semibold mb-4">
-          {if @editing_id, do: "Edit Validator", else: "Add Validator"}
-        </h3>
-        <form phx-submit="save" phx-change="validate_upload" class="flex gap-2 items-end flex-wrap">
-          <div class="flex-1 min-w-48">
-            <label class="label">Public Key</label>
-            <input
-              type="text"
-              name="public_key"
-              value={@form_public_key}
-              class="input input-bordered w-full"
-              placeholder="0x..."
-            />
-          </div>
-          <div class="w-32">
-            <label class="label">Index</label>
-            <input
-              type="number"
-              name="index"
-              value={@form_index}
-              class="input input-bordered w-full"
-              min="0"
-              placeholder="0"
-            />
-          </div>
-          <button type="submit" class="btn btn-primary">
-            <.icon name={if @editing_id, do: "hero-check", else: "hero-plus"} class="size-4" />
-            {if @editing_id, do: "Update", else: "Add"}
-          </button>
-          <button :if={@editing_id} type="button" phx-click="cancel_edit" class="btn btn-ghost">
-            Cancel
-          </button>
-        </form>
-        <p :if={@form_error} class="text-error text-sm mt-2">{@form_error}</p>
+    <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <%!-- Left: Validators --%>
+      <div class="lg:col-span-2">
+        <div class="card bg-base-200 p-6 mb-6">
+          <h3 class="text-lg font-semibold mb-4">
+            {if @editing_id, do: "Edit Validator", else: "Add Validator"}
+          </h3>
+          <form phx-submit="save" phx-change="validate_upload" class="flex gap-2 items-end flex-wrap">
+            <div class="flex-1 min-w-48">
+              <label class="label">Public Key</label>
+              <input
+                type="text"
+                name="public_key"
+                value={@form_public_key}
+                class="input input-bordered w-full"
+                placeholder="0x..."
+              />
+            </div>
+            <div class="w-32">
+              <label class="label">Index</label>
+              <input
+                type="number"
+                name="index"
+                value={@form_index}
+                class="input input-bordered w-full"
+                min="0"
+                placeholder="0"
+              />
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <.icon name={if @editing_id, do: "hero-check", else: "hero-plus"} class="size-4" />
+              {if @editing_id, do: "Update", else: "Add"}
+            </button>
+            <button :if={@editing_id} type="button" phx-click="cancel_edit" class="btn btn-ghost">
+              Cancel
+            </button>
+          </form>
+          <p :if={@form_error} class="text-error text-sm mt-2">{@form_error}</p>
 
-        <div class="divider">or import from file</div>
+          <div class="divider">or import from file</div>
 
-        <div class="flex gap-2 items-center flex-wrap">
-          <.live_file_input upload={@uploads.validator_file} class="file-input file-input-bordered file-input-sm" />
-          <button type="button" phx-click="upload_validators" class="btn btn-soft btn-sm">
-            <.icon name="hero-arrow-up-tray" class="size-4" /> Import
-          </button>
-          <span class="text-xs opacity-60">CSV or JSON file with public keys or indices</span>
+          <div class="flex gap-2 items-center flex-wrap">
+            <.live_file_input upload={@uploads.validator_file} class="file-input file-input-bordered file-input-sm" />
+            <button type="button" phx-click="upload_validators" class="btn btn-soft btn-sm">
+              <.icon name="hero-arrow-up-tray" class="size-4" /> Import
+            </button>
+            <span class="text-xs opacity-60">CSV or JSON file with public keys or indices</span>
+          </div>
+          <p :if={@upload_error} class="text-error text-sm mt-2">{@upload_error}</p>
         </div>
-        <p :if={@upload_error} class="text-error text-sm mt-2">{@upload_error}</p>
+
+        <div class="overflow-x-auto">
+          <table class="table table-zebra w-full">
+            <thead>
+              <tr>
+                <th>Index</th>
+                <th>Public Key</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :if={@validators == []}>
+                <td colspan="4" class="text-center opacity-50">No validators saved yet.</td>
+              </tr>
+              <tr :for={v <- @validators}>
+                <td>{v.index}</td>
+                <td class="font-mono text-sm max-w-xs truncate">{v.public_key}</td>
+                <td class="text-sm opacity-70">{Calendar.strftime(v.inserted_at, "%Y-%m-%d %H:%M")}</td>
+                <td class="flex gap-1">
+                  <div :if={@selected_group_id} class="flex gap-1">
+                    <button
+                      :if={not in_group?(@groups, @selected_group_id, v.id)}
+                      phx-click="add_to_group"
+                      phx-value-validator-id={v.id}
+                      class="btn btn-ghost btn-sm text-success"
+                      title="Add to group"
+                    >
+                      <.icon name="hero-arrow-right" class="size-4" />
+                    </button>
+                    <button
+                      :if={in_group?(@groups, @selected_group_id, v.id)}
+                      phx-click="remove_from_group"
+                      phx-value-validator-id={v.id}
+                      class="btn btn-ghost btn-sm text-warning"
+                      title="Remove from group"
+                    >
+                      <.icon name="hero-arrow-left" class="size-4" />
+                    </button>
+                  </div>
+                  <button phx-click="edit" phx-value-id={v.id} class="btn btn-ghost btn-sm">
+                    <.icon name="hero-pencil-square" class="size-4" />
+                  </button>
+                  <button
+                    phx-click="delete"
+                    phx-value-id={v.id}
+                    data-confirm="Delete this validator?"
+                    class="btn btn-ghost btn-sm text-error"
+                  >
+                    <.icon name="hero-trash" class="size-4" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div class="overflow-x-auto">
-        <table class="table table-zebra w-full">
-          <thead>
-            <tr>
-              <th>Index</th>
-              <th>Public Key</th>
-              <th>Created</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr :if={@validators == []}>
-              <td colspan="4" class="text-center opacity-50">No validators saved yet.</td>
-            </tr>
-            <tr :for={v <- @validators}>
-              <td>{v.index}</td>
-              <td class="font-mono text-sm max-w-xs truncate">{v.public_key}</td>
-              <td class="text-sm opacity-70">{Calendar.strftime(v.inserted_at, "%Y-%m-%d %H:%M")}</td>
-              <td class="flex gap-1">
-                <button phx-click="edit" phx-value-id={v.id} class="btn btn-ghost btn-sm">
-                  <.icon name="hero-pencil-square" class="size-4" />
+      <%!-- Right: Groups --%>
+      <div>
+        <div class="card bg-base-200 p-6 mb-6">
+          <h3 class="text-lg font-semibold mb-4">Groups</h3>
+          <form phx-submit="create_group" class="flex gap-2">
+            <input
+              type="text"
+              name="name"
+              class="input input-bordered flex-1"
+              placeholder="Group name"
+            />
+            <button type="submit" class="btn btn-primary btn-sm">
+              <.icon name="hero-plus" class="size-4" />
+            </button>
+          </form>
+          <p :if={@group_form_error} class="text-error text-sm mt-2">{@group_form_error}</p>
+        </div>
+
+        <div class="space-y-2">
+          <div
+            :for={group <- @groups}
+            class={"card p-4 cursor-pointer transition-colors #{if @selected_group_id == group.id, do: "bg-primary/10 ring-1 ring-primary", else: "bg-base-200 hover:bg-base-300"}"}
+          >
+            <div class="flex items-center justify-between">
+              <div
+                :if={@renaming_group_id != group.id}
+                phx-click="select_group"
+                phx-value-id={group.id}
+                class="flex-1"
+              >
+                <span class="font-semibold">{group.name}</span>
+                <span class="badge badge-sm ml-2">{length(group.validators)}</span>
+              </div>
+              <form
+                :if={@renaming_group_id == group.id}
+                phx-submit="rename_group"
+                phx-value-id={group.id}
+                class="flex gap-1 flex-1"
+              >
+                <input
+                  type="text"
+                  name="name"
+                  value={@rename_value}
+                  class="input input-bordered input-sm flex-1"
+                  autofocus
+                />
+                <button type="submit" class="btn btn-ghost btn-sm">
+                  <.icon name="hero-check" class="size-4" />
+                </button>
+                <button type="button" phx-click="cancel_rename" class="btn btn-ghost btn-sm">
+                  <.icon name="hero-x-mark" class="size-4" />
+                </button>
+              </form>
+              <div :if={@renaming_group_id != group.id} class="flex gap-1">
+                <button phx-click="start_rename" phx-value-id={group.id} class="btn btn-ghost btn-xs">
+                  <.icon name="hero-pencil-square" class="size-3" />
                 </button>
                 <button
-                  phx-click="delete"
-                  phx-value-id={v.id}
-                  data-confirm="Delete this validator?"
-                  class="btn btn-ghost btn-sm text-error"
+                  phx-click="delete_group"
+                  phx-value-id={group.id}
+                  data-confirm="Delete this group?"
+                  class="btn btn-ghost btn-xs text-error"
                 >
-                  <.icon name="hero-trash" class="size-4" />
+                  <.icon name="hero-trash" class="size-3" />
                 </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </div>
+            </div>
+
+            <div :if={@selected_group_id == group.id && group.validators != []} class="mt-2 space-y-1">
+              <div
+                :for={v <- group.validators}
+                class="flex items-center justify-between text-sm bg-base-100 rounded px-2 py-1"
+              >
+                <span class="font-mono truncate max-w-[12rem]">{display_validator(v)}</span>
+                <button
+                  phx-click="remove_from_group"
+                  phx-value-validator-id={v.id}
+                  class="btn btn-ghost btn-xs text-warning"
+                  title="Remove from group"
+                >
+                  <.icon name="hero-x-mark" class="size-3" />
+                </button>
+              </div>
+            </div>
+
+            <div :if={@selected_group_id == group.id && group.validators == []} class="mt-2 text-xs opacity-50">
+              No validators in this group. Use the arrow buttons to add.
+            </div>
+          </div>
+
+          <div :if={@groups == []} class="text-sm opacity-50 text-center p-4">
+            No groups yet. Create one above.
+          </div>
+        </div>
       </div>
     </div>
     """
   end
+
+  # --- Validator events ---
 
   @impl true
   def handle_event("save", %{"public_key" => public_key, "index" => index}, socket) do
@@ -176,7 +302,11 @@ defmodule EthercoasterWeb.ValidatorsLive do
 
   def handle_event("delete", %{"id" => id}, socket) do
     Validators.delete_validator(String.to_integer(id))
-    {:noreply, assign(socket, :validators, Validators.list_validators())}
+
+    {:noreply,
+     socket
+     |> assign(:validators, Validators.list_validators())
+     |> assign(:groups, Validators.list_groups())}
   end
 
   def handle_event("validate_upload", _params, socket) do
@@ -212,6 +342,94 @@ defmodule EthercoasterWeb.ValidatorsLive do
 
       _ ->
         {:noreply, socket}
+    end
+  end
+
+  # --- Group events ---
+
+  def handle_event("create_group", %{"name" => name}, socket) do
+    case Validators.create_group(%{name: String.trim(name)}) do
+      {:ok, _} ->
+        {:noreply, assign(socket, groups: Validators.list_groups(), group_form_error: nil)}
+
+      {:error, changeset} ->
+        error =
+          Ecto.Changeset.traverse_errors(changeset, fn {msg, _} -> msg end) |> inspect()
+
+        {:noreply, assign(socket, :group_form_error, "Validation failed: #{error}")}
+    end
+  end
+
+  def handle_event("select_group", %{"id" => id}, socket) do
+    group_id = String.to_integer(id)
+    selected = if socket.assigns.selected_group_id == group_id, do: nil, else: group_id
+    {:noreply, assign(socket, :selected_group_id, selected)}
+  end
+
+  def handle_event("start_rename", %{"id" => id}, socket) do
+    group = Validators.get_group!(String.to_integer(id))
+
+    {:noreply,
+     socket
+     |> assign(:renaming_group_id, group.id)
+     |> assign(:rename_value, group.name)}
+  end
+
+  def handle_event("rename_group", %{"id" => id, "name" => name}, socket) do
+    group = Validators.get_group!(String.to_integer(id))
+
+    case Validators.rename_group(group, %{name: String.trim(name)}) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> assign(:groups, Validators.list_groups())
+         |> assign(:renaming_group_id, nil)
+         |> assign(:rename_value, "")}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("cancel_rename", _, socket) do
+    {:noreply, assign(socket, renaming_group_id: nil, rename_value: "")}
+  end
+
+  def handle_event("delete_group", %{"id" => id}, socket) do
+    Validators.delete_group(String.to_integer(id))
+    group_id = String.to_integer(id)
+    selected = if socket.assigns.selected_group_id == group_id, do: nil, else: socket.assigns.selected_group_id
+
+    {:noreply,
+     socket
+     |> assign(:groups, Validators.list_groups())
+     |> assign(:selected_group_id, selected)}
+  end
+
+  def handle_event("add_to_group", %{"validator-id" => vid}, socket) do
+    Validators.add_to_group(socket.assigns.selected_group_id, String.to_integer(vid))
+    {:noreply, assign(socket, :groups, Validators.list_groups())}
+  end
+
+  def handle_event("remove_from_group", %{"validator-id" => vid}, socket) do
+    Validators.remove_from_group(socket.assigns.selected_group_id, String.to_integer(vid))
+    {:noreply, assign(socket, :groups, Validators.list_groups())}
+  end
+
+  # --- Helpers ---
+
+  defp in_group?(groups, group_id, validator_id) do
+    case Enum.find(groups, &(&1.id == group_id)) do
+      nil -> false
+      group -> Enum.any?(group.validators, &(&1.id == validator_id))
+    end
+  end
+
+  defp display_validator(v) do
+    if v.public_key =~ ~r/\A0x/ do
+      String.slice(v.public_key, 0, 10) <> "…" <> String.slice(v.public_key, -6, 6)
+    else
+      "#{v.index}"
     end
   end
 

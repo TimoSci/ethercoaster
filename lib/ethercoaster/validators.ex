@@ -3,6 +3,7 @@ defmodule Ethercoaster.Validators do
 
   alias Ethercoaster.Repo
   alias Ethercoaster.ValidatorRecord
+  alias Ethercoaster.ValidatorGroup
 
   def list_validators do
     ValidatorRecord
@@ -26,6 +27,67 @@ defmodule Ethercoaster.Validators do
 
   def delete_validator(id) do
     Repo.get!(ValidatorRecord, id) |> Repo.delete()
+  end
+
+  # --- Groups ---
+
+  def list_groups do
+    ValidatorGroup
+    |> order_by([g], asc: g.name)
+    |> preload(:validators)
+    |> Repo.all()
+  end
+
+  def get_group!(id) do
+    ValidatorGroup
+    |> preload(:validators)
+    |> Repo.get!(id)
+  end
+
+  def create_group(attrs) do
+    %ValidatorGroup{}
+    |> ValidatorGroup.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def rename_group(%ValidatorGroup{} = group, attrs) do
+    group
+    |> ValidatorGroup.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_group(id) do
+    Repo.get!(ValidatorGroup, id) |> Repo.delete()
+  end
+
+  def add_to_group(group_id, validator_id) do
+    group = get_group!(group_id)
+    validator = get_validator!(validator_id)
+
+    existing_ids = MapSet.new(group.validators, & &1.id)
+
+    unless MapSet.member?(existing_ids, validator.id) do
+      validators = group.validators ++ [validator]
+
+      group
+      |> Ecto.Changeset.change()
+      |> Ecto.Changeset.put_assoc(:validators, validators)
+      |> Repo.update!()
+    end
+
+    :ok
+  end
+
+  def remove_from_group(group_id, validator_id) do
+    group = get_group!(group_id)
+    validators = Enum.reject(group.validators, &(&1.id == validator_id))
+
+    group
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.put_assoc(:validators, validators)
+    |> Repo.update!()
+
+    :ok
   end
 
   @doc """
