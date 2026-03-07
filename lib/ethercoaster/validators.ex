@@ -1,9 +1,12 @@
 defmodule Ethercoaster.Validators do
   import Ecto.Query
 
+  require Logger
+
   alias Ethercoaster.Repo
   alias Ethercoaster.ValidatorRecord
   alias Ethercoaster.ValidatorGroup
+  alias Ethercoaster.BeaconChain.Beacon
 
   def list_validators do
     ValidatorRecord
@@ -33,6 +36,44 @@ defmodule Ethercoaster.Validators do
 
   def delete_validator(id) do
     Repo.get!(ValidatorRecord, id) |> Repo.delete()
+  end
+
+  @doc """
+  Resolves missing index or public_key for a validator by querying the beacon chain API.
+  Returns the updated validator record, or the original if the lookup fails.
+  """
+  def resolve_from_beacon(%ValidatorRecord{} = validator) do
+    identifier =
+      cond do
+        is_binary(validator.public_key) and validator.public_key != "" -> validator.public_key
+        is_integer(validator.index) -> Integer.to_string(validator.index)
+        true -> nil
+      end
+
+    if identifier do
+      case Beacon.get_validator("head", identifier) do
+        {:ok, %{"index" => index_str, "validator" => %{"pubkey" => pubkey}}} ->
+          index = if is_binary(index_str), do: String.to_integer(index_str), else: index_str
+          attrs = %{}
+          attrs = if is_nil(validator.index), do: Map.put(attrs, :index, index), else: attrs
+          attrs = if is_nil(validator.public_key) or validator.public_key == "", do: Map.put(attrs, :public_key, pubkey), else: attrs
+
+          if attrs != %{} do
+            case update_validator(validator, attrs) do
+              {:ok, updated} -> updated
+              {:error, _} -> validator
+            end
+          else
+            validator
+          end
+
+        {:error, reason} ->
+          Logger.warning("Failed to resolve validator #{identifier}: #{inspect(reason)}")
+          validator
+      end
+    else
+      validator
+    end
   end
 
   # --- Groups ---

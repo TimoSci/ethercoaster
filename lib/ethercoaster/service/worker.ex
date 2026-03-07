@@ -3,7 +3,7 @@ defmodule Ethercoaster.Service.Worker do
 
   require Logger
 
-  alias Ethercoaster.Services
+  alias Ethercoaster.{Services, Validators}
   alias Ethercoaster.Validator.Cache
   alias Ethercoaster.BeaconChain.{Beacon, Node}
 
@@ -54,6 +54,17 @@ defmodule Ethercoaster.Service.Worker do
     case resolve_epoch_range(service) do
       {:ok, from_epoch, to_epoch} ->
         validators = resolve_service_validators(service)
+
+        if validators == [] do
+          skipped = length(service.validators)
+          state = add_log(state, "No validators with a known index (#{skipped} skipped)")
+          state = %{state | status: :error}
+          broadcast_state(state, :status_change)
+          {:stop, :normal, state}
+        else
+          skipped = length(service.validators) - length(validators)
+          if skipped > 0, do: Logger.warning("Service #{state.service_id}: skipping #{skipped} validator(s) with no index")
+
         categories = Enum.map(service.categories, &String.to_existing_atom/1)
         genesis_time = get_genesis_time()
 
@@ -79,6 +90,7 @@ defmodule Ethercoaster.Service.Worker do
         broadcast_state(state, :status_change)
         send(self(), :process_batch)
         {:noreply, state}
+        end
 
       {:error, reason} ->
         state = add_log(state, "Failed to start: #{reason}")
@@ -192,7 +204,16 @@ defmodule Ethercoaster.Service.Worker do
   end
 
   defp resolve_service_validators(service) do
-    Enum.map(service.validators, fn vr ->
+    service.validators
+    |> Enum.map(fn vr ->
+      if is_nil(vr.index) or is_nil(vr.public_key) or vr.public_key == "" do
+        Validators.resolve_from_beacon(vr)
+      else
+        vr
+      end
+    end)
+    |> Enum.filter(fn vr -> is_integer(vr.index) end)
+    |> Enum.map(fn vr ->
       %{id: vr.id, public_key: vr.public_key, index: vr.index}
     end)
   end
