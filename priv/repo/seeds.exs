@@ -89,7 +89,8 @@ transaction_types = [
   %{name: "Priority fees (tips)", event: "Block proposal", chain: :execution, category: "Block Proposal"},
   %{name: "MEV rewards", event: "Block proposal", chain: :execution, category: "Block Proposal"},
   # Slashing
-  %{name: "Initial + correlation penalty", event: "Slashing", chain: :consensus, category: "Slashing"},
+  %{name: "Slashing initial penalty", event: "Slashing", chain: :consensus, category: "Slashing"},
+  %{name: "Slashing correlation penalty", event: "Slashing", chain: :consensus, category: "Slashing"},
   # Lifecycle
   %{name: "Deposit", event: "Deposit", chain: :consensus, category: "Lifecycle"},
   %{name: "Voluntary exit", event: "Voluntary exit", chain: :consensus, category: "Lifecycle"},
