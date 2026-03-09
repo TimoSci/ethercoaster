@@ -90,7 +90,19 @@ defmodule EthercoasterWeb.ValidatorsLive do
               <tr>
                 <th>Index</th>
                 <th>Public Key</th>
-                <th>State</th>
+                <th>
+                  <div class="flex items-center gap-1">
+                    State
+                    <button
+                      phx-click="check_all_states"
+                      class={"btn btn-ghost btn-xs #{if @checking_ids != MapSet.new(), do: "loading loading-spinner"}"}
+                      disabled={@checking_ids != MapSet.new()}
+                      title="Check all states"
+                    >
+                      <.icon :if={@checking_ids == MapSet.new()} name="hero-arrow-path" class="size-3" />
+                    </button>
+                  </div>
+                </th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -363,6 +375,22 @@ defmodule EthercoasterWeb.ValidatorsLive do
       _ ->
         {:noreply, socket}
     end
+  end
+
+  def handle_event("check_all_states", _params, socket) do
+    pid = self()
+    validators = socket.assigns.validators
+    ids = Enum.map(validators, & &1.id) |> MapSet.new()
+    socket = assign(socket, :checking_ids, ids)
+
+    for v <- validators do
+      Task.start(fn ->
+        result = Validators.check_state(v)
+        send(pid, {:state_checked, v.id, result})
+      end)
+    end
+
+    {:noreply, socket}
   end
 
   def handle_event("check_state", %{"id" => id}, socket) do
