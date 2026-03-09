@@ -37,3 +37,6 @@ npm-debug.log
 
 # Environment variable setter
 setenv.sh
+
+# Private local data
+/priv/data/
