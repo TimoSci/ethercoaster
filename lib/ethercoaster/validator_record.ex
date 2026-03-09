@@ -5,7 +5,9 @@ defmodule Ethercoaster.ValidatorRecord do
   schema "validators" do
     field :public_key, :string
     field :index, :integer
+    field :exists, :boolean
 
+    belongs_to :state, Ethercoaster.ValidatorState
     has_many :transactions, Ethercoaster.Transaction, foreign_key: :validator_id
 
     many_to_many :groups, Ethercoaster.ValidatorGroup,
@@ -19,7 +21,7 @@ defmodule Ethercoaster.ValidatorRecord do
   @doc false
   def changeset(validator, attrs) do
     validator
-    |> cast(attrs, [:public_key, :index])
+    |> cast(attrs, [:public_key, :index, :exists, :state_id])
     |> normalize_blanks()
     |> validate_at_least_one()
     |> unique_constraint(:public_key)

@@ -11,12 +11,14 @@ defmodule Ethercoaster.Validators do
   def list_validators do
     ValidatorRecord
     |> order_by([v], desc: v.inserted_at, desc: v.id)
+    |> preload(:state)
     |> Repo.all()
   end
 
   def list_validators_by_index do
     ValidatorRecord
     |> order_by([v], asc: v.index)
+    |> preload(:state)
     |> Repo.all()
   end
 
@@ -75,6 +77,50 @@ defmodule Ethercoaster.Validators do
       validator
     end
   end
+
+  @doc """
+  Queries the beacon chain for the validator's current state and updates the record.
+  Sets `exists` to true/false and `state_id` to the matching validator state.
+  """
+  def check_state(%ValidatorRecord{} = validator) do
+    identifier =
+      cond do
+        is_binary(validator.public_key) and validator.public_key != "" -> validator.public_key
+        is_integer(validator.index) -> Integer.to_string(validator.index)
+        true -> nil
+      end
+
+    if is_nil(identifier) do
+      {:error, "No public key or index to look up"}
+    else
+      case Beacon.get_validator("head", identifier) do
+        {:ok, %{"status" => status} = data} ->
+          state = Repo.get_by(Ethercoaster.ValidatorState, name: status)
+
+          attrs = %{exists: true, state_id: state && state.id}
+
+          # Also backfill missing index/pubkey while we're at it
+          attrs = maybe_backfill(attrs, validator, data)
+
+          update_validator(validator, attrs)
+
+        {:error, %{status: 404}} ->
+          update_validator(validator, %{exists: false, state_id: nil})
+
+        {:error, reason} ->
+          Logger.warning("Failed to check state for validator #{identifier}: #{inspect(reason)}")
+          {:error, reason}
+      end
+    end
+  end
+
+  defp maybe_backfill(attrs, validator, %{"index" => index_str, "validator" => %{"pubkey" => pubkey}}) do
+    index = if is_binary(index_str), do: String.to_integer(index_str), else: index_str
+    attrs = if is_nil(validator.index), do: Map.put(attrs, :index, index), else: attrs
+    if is_nil(validator.public_key) or validator.public_key == "", do: Map.put(attrs, :public_key, pubkey), else: attrs
+  end
+
+  defp maybe_backfill(attrs, _validator, _data), do: attrs
 
   # --- Groups ---
 

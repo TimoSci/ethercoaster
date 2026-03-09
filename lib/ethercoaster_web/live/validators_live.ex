@@ -15,6 +15,7 @@ defmodule EthercoasterWeb.ValidatorsLive do
       |> assign(:form_index, "")
       |> assign(:form_error, nil)
       |> assign(:upload_error, nil)
+      |> assign(:checking_ids, MapSet.new())
       |> assign(:group_form_error, nil)
       |> assign(:renaming_group_id, nil)
       |> assign(:rename_value, "")
@@ -89,17 +90,34 @@ defmodule EthercoasterWeb.ValidatorsLive do
               <tr>
                 <th>Index</th>
                 <th>Public Key</th>
+                <th>State</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr :if={@validators == []}>
-                <td colspan="4" class="text-center opacity-50">No validators saved yet.</td>
+                <td colspan="5" class="text-center opacity-50">No validators saved yet.</td>
               </tr>
               <tr :for={v <- @validators}>
                 <td>{v.index}</td>
                 <td class="font-mono text-sm max-w-xs truncate">{v.public_key}</td>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <span :if={v.exists == false} class="badge badge-error badge-sm">not found</span>
+                    <span :if={v.exists == true && v.state} class={"badge badge-sm #{state_badge_class(v.state.name)}"}>{v.state.name}</span>
+                    <span :if={is_nil(v.exists)} class="text-xs opacity-40">—</span>
+                    <button
+                      phx-click="check_state"
+                      phx-value-id={v.id}
+                      class={"btn btn-ghost btn-xs #{if v.id in @checking_ids, do: "loading loading-spinner"}"}
+                      disabled={v.id in @checking_ids}
+                      title="Check state"
+                    >
+                      <.icon :if={v.id not in @checking_ids} name="hero-arrow-path" class="size-3" />
+                    </button>
+                  </div>
+                </td>
                 <td class="text-sm opacity-70">{Calendar.strftime(v.inserted_at, "%Y-%m-%d %H:%M")}</td>
                 <td class="flex gap-1">
                   <div :if={@selected_group_id} class="flex gap-1">
@@ -347,6 +365,21 @@ defmodule EthercoasterWeb.ValidatorsLive do
     end
   end
 
+  def handle_event("check_state", %{"id" => id}, socket) do
+    id = String.to_integer(id)
+    validator = Validators.get_validator!(id)
+    socket = update(socket, :checking_ids, &MapSet.put(&1, id))
+
+    pid = self()
+
+    Task.start(fn ->
+      result = Validators.check_state(validator)
+      send(pid, {:state_checked, id, result})
+    end)
+
+    {:noreply, socket}
+  end
+
   # --- Group events ---
 
   def handle_event("create_group", %{"name" => name}, socket) do
@@ -418,6 +451,22 @@ defmodule EthercoasterWeb.ValidatorsLive do
     {:noreply, assign(socket, :groups, Validators.list_groups())}
   end
 
+  @impl true
+  def handle_info({:state_checked, id, result}, socket) do
+    socket = update(socket, :checking_ids, &MapSet.delete(&1, id))
+
+    socket =
+      case result do
+        {:ok, _} ->
+          assign(socket, :validators, Validators.list_validators())
+
+        {:error, reason} ->
+          put_flash(socket, :error, "Failed to check state: #{inspect(reason)}")
+      end
+
+    {:noreply, socket}
+  end
+
   # --- Helpers ---
 
   defp in_group?(groups, group_id, validator_id) do
@@ -437,6 +486,16 @@ defmodule EthercoasterWeb.ValidatorsLive do
         "#{v.index}"
       true ->
         "?"
+    end
+  end
+
+  defp state_badge_class(name) do
+    cond do
+      String.starts_with?(name, "active") -> "badge-success"
+      String.starts_with?(name, "pending") -> "badge-warning"
+      String.starts_with?(name, "exited") -> "badge-info"
+      String.starts_with?(name, "withdrawal") -> "badge-neutral"
+      true -> ""
     end
   end
 
