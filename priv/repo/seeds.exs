@@ -22,6 +22,7 @@ event_names = [
   "Sync committee participation",
   "Block proposal",
   "Slashing",
+  "Slashing reward",
   "Deposit",
   "Voluntary exit",
   "Withdrawal",
@@ -91,6 +92,8 @@ transaction_types = [
   # Slashing
   %{name: "Slashing initial penalty", event: "Slashing", chain: :consensus, category: "Slashing"},
   %{name: "Slashing correlation penalty", event: "Slashing", chain: :consensus, category: "Slashing"},
+  %{name: "Slashing proposer reward", event: "Slashing reward", chain: :consensus, category: "Slashing"},
+  %{name: "Slashing whistleblower reward", event: "Slashing reward", chain: :consensus, category: "Slashing"},
   # Lifecycle
   %{name: "Deposit", event: "Deposit", chain: :consensus, category: "Lifecycle"},
   %{name: "Voluntary exit", event: "Voluntary exit", chain: :consensus, category: "Lifecycle"},
