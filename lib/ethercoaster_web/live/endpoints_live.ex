@@ -6,9 +6,14 @@ defmodule EthercoasterWeb.EndpointsLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    default_endpoint =
+      Application.get_env(:ethercoaster, Ethercoaster.BeaconChain, [])
+      |> Keyword.get(:base_url, "http://localhost:5052")
+
     socket =
       socket
       |> assign(:endpoints, Endpoints.list_endpoints())
+      |> assign(:default_endpoint, default_endpoint)
       |> assign(:editing_id, nil)
       |> assign(:form_address, "")
       |> assign(:form_port, "")
@@ -29,6 +34,13 @@ defmodule EthercoasterWeb.EndpointsLive do
       <button onclick="history.back()" class="btn btn-ghost btn-sm mb-4">
         <.icon name="hero-arrow-left" class="size-4" /> Back
       </button>
+
+      <div class="card bg-base-200 p-4 mb-6">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="opacity-70">Default endpoint:</span>
+          <span class="font-mono">{@default_endpoint}</span>
+        </div>
+      </div>
 
       <div class="card bg-base-200 p-6 mb-6">
         <h3 class="text-lg font-semibold mb-4">
