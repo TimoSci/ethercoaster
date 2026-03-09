@@ -1,0 +1,28 @@
+[Unit]
+Description=Erigon Execution Client (Mainnet)
+After=network.target
+Wants=network.target
+
+[Service]
+User=tfj
+Group=tfj
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=/home/tfj/erigon/build/bin/erigon \
+  --chain=mainnet \
+  --datadir=/var/lib/erigon \
+  --private.api.addr=127.0.0.1:9091 \
+  --http \
+  --http.addr=0.0.0.0 \
+  --http.api=eth,web3,net,debug,trace,txpool,admin \
+  --beacon.api=beacon,builder,config,debug,node,validator,lighthouse \
+  --beacon.api.addr=0.0.0.0 \
+  --prune.mode=archive \
+  --caplin.states-archive \
+  --beacon.api=beacon \
+  --torrent.download.rate=1gb \
+  --port=30903      
+
+[Install]
+WantedBy=default.target
