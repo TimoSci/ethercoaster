@@ -20,7 +20,7 @@ defmodule EthercoasterWeb.ValidatorsLive do
       |> assign(:renaming_group_id, nil)
       |> assign(:rename_value, "")
       |> assign(:selected_group_id, nil)
-      |> allow_upload(:validator_file, accept: ~w(.csv .json), max_entries: 1)
+      |> allow_upload(:validator_file, accept: ~w(.csv .json), max_entries: 1, auto_upload: true)
 
     {:ok, socket}
   end
@@ -74,13 +74,16 @@ defmodule EthercoasterWeb.ValidatorsLive do
 
           <div class="divider">or import from file</div>
 
-          <div class="flex gap-2 items-center flex-wrap">
+          <form phx-change="validate_upload" phx-submit="upload_validators" class="flex gap-2 items-center flex-wrap">
             <.live_file_input upload={@uploads.validator_file} class="file-input file-input-bordered file-input-sm" />
-            <button type="button" phx-click="upload_validators" class="btn btn-soft btn-sm">
+            <button type="submit" class="btn btn-soft btn-sm">
               <.icon name="hero-arrow-up-tray" class="size-4" /> Import
             </button>
-            <span class="text-xs opacity-60">CSV or JSON file with public keys or indices</span>
-          </div>
+            <button type="button" phx-click="fuzzy_upload_validators" class="btn btn-soft btn-sm">
+              <.icon name="hero-arrow-up-tray" class="size-4" /> Fuzzy Import
+            </button>
+            <span class="text-xs opacity-60">CSV or JSON with public keys or indices · fuzzy: more forgiving, more error prone</span>
+          </form>
           <p :if={@upload_error} class="text-error text-sm mt-2">{@upload_error}</p>
         </div>
 
@@ -371,6 +374,94 @@ defmodule EthercoasterWeb.ValidatorsLive do
 
       [{:error, reason}] ->
         {:noreply, assign(socket, :upload_error, reason)}
+
+      [] ->
+        {:noreply, assign(socket, :upload_error, "No file selected")}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("fuzzy_upload_validators", _params, socket) do
+    uploaded =
+      consume_uploaded_entries(socket, :validator_file, fn %{path: path}, entry ->
+        content = File.read!(path)
+        {:ok, ValidatorImport.fuzzy_parse_file(content, entry.client_name)}
+      end)
+
+    case uploaded do
+      [{:ok, %{groups: groups, flat: flat}}] ->
+        try do
+          all_keys = flat ++ (groups |> Map.values() |> List.flatten())
+          all_keys = Enum.uniq(all_keys)
+
+          if all_keys == [] do
+            {:noreply, assign(socket, :upload_error, "No valid public keys found in file")}
+          else
+            resolved = Validators.resolve_inputs(all_keys)
+
+            # Build a lookup from public_key to validator record
+            key_to_record =
+              resolved
+              |> Enum.filter(& &1.public_key)
+              |> Map.new(&{&1.public_key, &1})
+
+            # Create groups from JSON hierarchy
+            group_counter = make_ref()
+            Process.put(group_counter, 0)
+
+            group_count =
+              Enum.reduce(groups, 0, fn {name, keys}, acc ->
+                group_name =
+                  if name == "" do
+                    n = Process.get(group_counter) + 1
+                    Process.put(group_counter, n)
+                    "import-#{n}"
+                  else
+                    name
+                  end
+
+                case Validators.create_group(%{name: group_name}) do
+                  {:ok, group} ->
+                    Enum.each(keys, fn key ->
+                      case Map.get(key_to_record, key) do
+                        %{id: vid} -> Validators.add_to_group(group.id, vid)
+                        nil -> :skip
+                      end
+                    end)
+
+                    acc + 1
+
+                  {:error, _} ->
+                    # Group name conflict, skip
+                    acc
+                end
+              end)
+
+            msg =
+              "Fuzzy imported #{length(all_keys)} validator(s)" <>
+                if(group_count > 0, do: " in #{group_count} group(s)", else: "")
+
+            socket =
+              socket
+              |> assign(:validators, Validators.list_validators())
+              |> assign(:groups, Validators.list_groups())
+              |> assign(:upload_error, nil)
+              |> put_flash(:info, msg)
+
+            {:noreply, socket}
+          end
+        rescue
+          e ->
+            {:noreply, assign(socket, :upload_error, Exception.message(e))}
+        end
+
+      [{:error, reason}] ->
+        {:noreply, assign(socket, :upload_error, reason)}
+
+      [] ->
+        {:noreply, assign(socket, :upload_error, "No file selected")}
 
       _ ->
         {:noreply, socket}
