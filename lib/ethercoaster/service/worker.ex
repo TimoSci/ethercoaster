@@ -5,7 +5,7 @@ defmodule Ethercoaster.Service.Worker do
 
   alias Ethercoaster.{Services, Validators}
   alias Ethercoaster.Validator.Cache
-  alias Ethercoaster.BeaconChain.{Beacon, Node}
+  alias Ethercoaster.BeaconChain.{Beacon, Node, Rewards}
 
   @slots_per_epoch 32
   @max_log_entries 50
@@ -225,8 +225,14 @@ defmodule Ethercoaster.Service.Worker do
   defp build_work_queue(validators, from_epoch, to_epoch, categories) do
     all_epochs = Enum.to_list(from_epoch..to_epoch)
 
+    # Sort categories so :block_proposal comes first
+    sorted_categories = Enum.sort_by(categories, fn
+      :block_proposal -> 0
+      _ -> 1
+    end)
+
     for validator <- validators,
-        category <- categories,
+        category <- sorted_categories,
         epoch <- uncached_epochs(validator.id, from_epoch, to_epoch, all_epochs, category) do
       {validator, epoch, category}
     end
@@ -247,6 +253,18 @@ defmodule Ethercoaster.Service.Worker do
     rescue
       e ->
         Logger.error("Service worker attestation fetch failed: #{inspect(e)}")
+        :error
+    end
+  end
+
+  defp fetch_and_store(validator, epochs, :block_proposal, genesis_time) do
+    try do
+      {:ok, data} = Rewards.fetch_proposal_rewards(epochs, validator.index)
+      Cache.store_and_mark(:block_proposal, validator.id, data, epochs, genesis_time)
+      :ok
+    rescue
+      e ->
+        Logger.error("Service worker block proposal fetch failed: #{inspect(e)}")
         :error
     end
   end

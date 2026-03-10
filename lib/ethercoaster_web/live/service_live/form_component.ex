@@ -112,8 +112,9 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     {:noreply, socket}
   end
 
-  def handle_event("validate_upload", _params, socket) do
-    {:noreply, socket}
+  def handle_event("validate_upload", params, socket) do
+    categories = Map.get(params, "categories", [])
+    {:noreply, assign(socket, :categories, categories)}
   end
 
   def handle_event("upload_validators", _params, socket) do
@@ -363,16 +364,28 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
           </label>
           <div class="flex flex-wrap gap-4">
             <label class="label cursor-pointer gap-2">
-              <input type="checkbox" checked disabled class="checkbox checkbox-primary" />
+              <input
+                type="checkbox"
+                name="categories[]"
+                value="attestation"
+                checked={Enum.member?(@categories, "attestation")}
+                class="checkbox checkbox-primary"
+              />
               <span>Attestation</span>
             </label>
             <label class="label cursor-pointer gap-2 opacity-50">
               <input type="checkbox" disabled class="checkbox" />
               <span>Sync Committee <span class="badge badge-sm">coming soon</span></span>
             </label>
-            <label class="label cursor-pointer gap-2 opacity-50">
-              <input type="checkbox" disabled class="checkbox" />
-              <span>Block Proposal <span class="badge badge-sm">coming soon</span></span>
+            <label class="label cursor-pointer gap-2">
+              <input
+                type="checkbox"
+                name="categories[]"
+                value="block_proposal"
+                checked={Enum.member?(@categories, "block_proposal")}
+                class="checkbox checkbox-primary"
+              />
+              <span>Block Proposal</span>
             </label>
           </div>
         </div>
