@@ -18,6 +18,8 @@ defmodule EthercoasterWeb.EndpointsLive do
       |> assign(:form_address, "")
       |> assign(:form_port, "")
       |> assign(:form_error, nil)
+      |> assign(:test_results, %{})
+      |> assign(:testing_ids, MapSet.new())
 
     {:ok, socket}
   end
@@ -97,8 +99,17 @@ defmodule EthercoasterWeb.EndpointsLive do
             <tr :for={ep <- @endpoints}>
               <td>{ep.address}</td>
               <td>{ep.port}</td>
-              <td class="font-mono text-sm">{EndpointRecord.url(ep)}</td>
+              <td class={"font-mono text-sm #{test_result_class(@test_results, ep.id)}"}>{EndpointRecord.url(ep)}</td>
               <td class="flex gap-1">
+                <button
+                  phx-click="test_endpoint"
+                  phx-value-id={ep.id}
+                  class={"btn btn-ghost btn-sm #{if ep.id in @testing_ids, do: "loading loading-spinner"}"}
+                  disabled={ep.id in @testing_ids}
+                  title="Test endpoint"
+                >
+                  <.icon :if={ep.id not in @testing_ids} name="hero-signal" class="size-4" />
+                </button>
                 <button phx-click="edit" phx-value-id={ep.id} class="btn btn-ghost btn-sm">
                   <.icon name="hero-pencil-square" class="size-4" />
                 </button>
@@ -179,6 +190,50 @@ defmodule EthercoasterWeb.EndpointsLive do
     Endpoints.delete_endpoint(String.to_integer(id))
 
     {:noreply, assign(socket, :endpoints, Endpoints.list_endpoints())}
+  end
+
+  def handle_event("test_endpoint", %{"id" => id}, socket) do
+    id = String.to_integer(id)
+    endpoint = Endpoints.get_endpoint!(id)
+    url = EndpointRecord.url(endpoint)
+    socket = update(socket, :testing_ids, &MapSet.put(&1, id))
+    pid = self()
+
+    Task.start(fn ->
+      result =
+        try do
+          case Req.get(url <> "/eth/v1/node/health", receive_timeout: 5000, connect_timeout: 5000) do
+            {:ok, %{status: status}} when status in 200..299 -> :ok
+            {:ok, %{status: _}} -> :denied
+            {:error, _} -> :unreachable
+          end
+        rescue
+          _ -> :unreachable
+        end
+
+      send(pid, {:endpoint_tested, id, result})
+    end)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:endpoint_tested, id, result}, socket) do
+    socket =
+      socket
+      |> update(:testing_ids, &MapSet.delete(&1, id))
+      |> update(:test_results, &Map.put(&1, id, result))
+
+    {:noreply, socket}
+  end
+
+  defp test_result_class(test_results, id) do
+    case Map.get(test_results, id) do
+      :ok -> "text-success"
+      :denied -> "text-warning"
+      :unreachable -> "text-error"
+      nil -> ""
+    end
   end
 
   defp parse_port(""), do: nil
