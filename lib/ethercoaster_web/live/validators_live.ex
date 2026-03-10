@@ -256,6 +256,14 @@ defmodule EthercoasterWeb.ValidatorsLive do
                   <.icon name="hero-x-mark" class="size-3" />
                 </button>
               </div>
+              <button
+                :if={Enum.any?(group.validators, &(&1.exists == false))}
+                phx-click="remove_nonexistent_from_group"
+                phx-value-id={group.id}
+                class="btn btn-ghost btn-xs text-error mt-1"
+              >
+                <.icon name="hero-trash" class="size-3" /> Remove nonexistent validators
+              </button>
             </div>
 
             <div :if={@selected_group_id == group.id && group.validators == []} class="mt-2 text-xs opacity-50">
@@ -567,6 +575,17 @@ defmodule EthercoasterWeb.ValidatorsLive do
 
   def handle_event("remove_from_group", %{"validator-id" => vid}, socket) do
     Validators.remove_from_group(socket.assigns.selected_group_id, String.to_integer(vid))
+    {:noreply, assign(socket, :groups, Validators.list_groups())}
+  end
+
+  def handle_event("remove_nonexistent_from_group", %{"id" => id}, socket) do
+    group_id = String.to_integer(id)
+    group = Validators.get_group!(group_id)
+
+    Enum.each(group.validators, fn v ->
+      if v.exists == false, do: Validators.remove_from_group(group_id, v.id)
+    end)
+
     {:noreply, assign(socket, :groups, Validators.list_groups())}
   end
 
