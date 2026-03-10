@@ -17,8 +17,25 @@ import Config
 # Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
 # script that automatically sets the env var above.
 # Beacon Chain API client
+#
+# The default base_url is read from priv/repo/endpoints.exs (the first entry
+# marked `default: true`). Falls back to BEACON_API_URL env var or localhost.
+default_beacon_url =
+  case File.read("priv/repo/endpoints.exs") do
+    {:ok, content} ->
+      {endpoints, _} = Code.eval_string(content)
+
+      case Enum.find(endpoints, & &1[:default]) do
+        %{url: url} -> url
+        _ -> List.first(endpoints)[:url]
+      end
+
+    {:error, _} ->
+      nil
+  end
+
 config :ethercoaster, Ethercoaster.BeaconChain,
-  base_url: System.get_env("BEACON_API_URL", "http://localhost:5052"),
+  base_url: default_beacon_url || System.get_env("BEACON_API_URL", "http://localhost:5052"),
   api_key: System.get_env("BEACON_API_KEY"),
   receive_timeout: String.to_integer(System.get_env("BEACON_API_TIMEOUT", "15000")),
   pool_size: String.to_integer(System.get_env("BEACON_POOL_SIZE", "32")),

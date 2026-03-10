@@ -40,3 +40,6 @@ setenv.sh
 
 # Private local data
 /priv/data/
+
+# Private endpoint configuration (see endpoints.example.exs)
+/priv/repo/endpoints.exs

@@ -117,6 +117,32 @@ end
 
 IO.puts("Seeded #{length(event_names)} events, #{length(transaction_types)} transaction types in #{map_size(categories)} categories")
 
+# --- Seed endpoints from priv/repo/endpoints.exs ---
+
+endpoints_path = Path.join(:code.priv_dir(:ethercoaster), "repo/endpoints.exs")
+
+if File.exists?(endpoints_path) do
+  {endpoints, _} = Code.eval_file(endpoints_path)
+
+  for %{url: url} <- endpoints do
+    case Ethercoaster.EndpointRecord.parse_url(url) do
+      {:ok, attrs} ->
+        Repo.insert!(
+          %Ethercoaster.EndpointRecord{address: attrs.address, port: attrs.port},
+          on_conflict: :nothing,
+          conflict_target: [:address, :port]
+        )
+
+      {:error, reason} ->
+        IO.puts("Skipping invalid endpoint #{url}: #{reason}")
+    end
+  end
+
+  IO.puts("Seeded #{length(endpoints)} endpoint(s) from endpoints.exs")
+else
+  IO.puts("No priv/repo/endpoints.exs found — skipping endpoint seeding (see endpoints.example.exs)")
+end
+
 # Import ESTV price CSV files
 Path.wildcard(Path.join(:code.priv_dir(:ethercoaster), "repo/data/*.csv"))
 |> Enum.each(fn path ->
