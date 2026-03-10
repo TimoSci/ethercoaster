@@ -223,7 +223,7 @@ defmodule EthercoasterWeb.EndpointsLive do
     Task.start(fn ->
       {status_kind, log} =
         try do
-          case Req.get(url <> "/eth/v1/node/health", receive_timeout: 5000, connect_timeout: 5000, retry: false) do
+          case Req.get(url <> "/eth/v1/node/health", receive_timeout: 5000, connect_options: [timeout: 5000], retry: false) do
             {:ok, %{status: status, headers: headers, body: body}} ->
               kind = if status in 200..299, do: :ok, else: :denied
               log = format_response(status, headers, body)
