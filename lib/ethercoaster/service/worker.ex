@@ -145,7 +145,8 @@ defmodule Ethercoaster.Service.Worker do
     batch_start = System.monotonic_time(:millisecond)
     now_utc = DateTime.utc_now() |> DateTime.to_unix(:millisecond)
 
-    {batch, rest} = Enum.split(state.work_queue, state.batch_size)
+    effective_size = effective_batch_size(state.work_queue, state.batch_size)
+    {batch, rest} = Enum.split(state.work_queue, effective_size)
     state = %{state | work_queue: rest, batch_started_at: now_utc}
 
     broadcast_state(state, :batch_started)
@@ -340,6 +341,15 @@ defmodule Ethercoaster.Service.Worker do
   defp default_batch_size do
     Application.get_env(:ethercoaster, Ethercoaster.BeaconChain, [])
     |> Keyword.get(:batch_size, 50)
+  end
+
+  defp effective_batch_size([], base_size), do: base_size
+
+  defp effective_batch_size([{_, _, front_category} | _], base_size) do
+    overrides = Application.get_env(:ethercoaster, Ethercoaster.BeaconChain, [])
+                |> Keyword.get(:batch_sizes, %{})
+
+    Map.get(overrides, front_category, base_size)
   end
 
   defp state_snapshot(state) do

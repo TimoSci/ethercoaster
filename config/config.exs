@@ -67,7 +67,10 @@ config :ethercoaster, Ethercoaster.BeaconChain,
   pool_size: 32,
   pool_count: 1,
   max_concurrency: 48,
-  batch_size: 50
+  batch_size: 50,
+  batch_sizes: %{
+    block_proposal: 500
+  }
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
