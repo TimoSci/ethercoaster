@@ -20,7 +20,11 @@ defmodule Ethercoaster.Service.Worker do
 
   def pause(pid), do: GenServer.cast(pid, :pause)
 
-  def get_state(pid), do: GenServer.call(pid, :get_state)
+  def get_state(pid) do
+    GenServer.call(pid, :get_state, 2_000)
+  catch
+    :exit, _ -> %{status: :running, epochs_completed: 0, epochs_total: 0, log: ["Worker busy..."]}
+  end
 
   # --- Server callbacks ---
 
