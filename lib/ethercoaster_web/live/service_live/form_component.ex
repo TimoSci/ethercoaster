@@ -1,6 +1,8 @@
 defmodule EthercoasterWeb.ServiceLive.FormComponent do
   use EthercoasterWeb, :live_component
 
+  @picker_size 5
+
   @impl true
   def mount(socket) do
     socket =
@@ -20,8 +22,10 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
       |> assign(:mode, :create)
       |> assign(:service, nil)
       |> assign(:initialized, false)
-      |> assign(:show_picker, false)
-      |> assign(:picker_offset, 0)
+      |> assign(:show_validator_picker, false)
+      |> assign(:validator_picker_offset, 0)
+      |> assign(:show_endpoint_picker, false)
+      |> assign(:endpoint_picker_offset, 0)
       |> allow_upload(:validator_file, accept: ~w(.csv .json), max_entries: 1)
 
     {:ok, socket}
@@ -97,10 +101,6 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     {:noreply, assign(socket, field_atom, value)}
   end
 
-  def handle_event("select_endpoint", %{"url" => url}, socket) do
-    {:noreply, assign(socket, :endpoint, url)}
-  end
-
   def handle_event("save", _params, socket) do
     params = build_service_params(socket)
 
@@ -139,11 +139,31 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     end
   end
 
-  def handle_event("toggle_picker", _, socket) do
-    {:noreply, assign(socket, :show_picker, !socket.assigns.show_picker)}
+  def handle_event("toggle_picker", %{"picker" => "validator"}, socket) do
+    {:noreply, assign(socket, :show_validator_picker, !socket.assigns.show_validator_picker)}
   end
 
-  def handle_event("pick_validator", %{"validator" => value}, socket) do
+  def handle_event("toggle_picker", %{"picker" => "endpoint"}, socket) do
+    {:noreply, assign(socket, :show_endpoint_picker, !socket.assigns.show_endpoint_picker)}
+  end
+
+  def handle_event("picker_prev", %{"picker" => "validator"}, socket) do
+    {:noreply, assign(socket, :validator_picker_offset, max(socket.assigns.validator_picker_offset - @picker_size, 0))}
+  end
+
+  def handle_event("picker_prev", %{"picker" => "endpoint"}, socket) do
+    {:noreply, assign(socket, :endpoint_picker_offset, max(socket.assigns.endpoint_picker_offset - @picker_size, 0))}
+  end
+
+  def handle_event("picker_next", %{"picker" => "validator"}, socket) do
+    {:noreply, assign(socket, :validator_picker_offset, socket.assigns.validator_picker_offset + @picker_size)}
+  end
+
+  def handle_event("picker_next", %{"picker" => "endpoint"}, socket) do
+    {:noreply, assign(socket, :endpoint_picker_offset, socket.assigns.endpoint_picker_offset + @picker_size)}
+  end
+
+  def handle_event("pick_validator", %{"item" => value}, socket) do
     existing = Enum.reject(socket.assigns.validators, &(&1 == ""))
 
     if value in existing do
@@ -154,13 +174,8 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     end
   end
 
-  def handle_event("picker_prev", _, socket) do
-    offset = max(socket.assigns.picker_offset - 5, 0)
-    {:noreply, assign(socket, :picker_offset, offset)}
-  end
-
-  def handle_event("picker_next", _, socket) do
-    {:noreply, assign(socket, :picker_offset, socket.assigns.picker_offset + 5)}
+  def handle_event("pick_endpoint", %{"item" => value}, socket) do
+    {:noreply, assign(socket, :endpoint, value)}
   end
 
   defp build_service_params(socket) do
@@ -194,33 +209,97 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
   defp parse_int_or_nil(n) when is_integer(n), do: n
   defp parse_int_or_nil(_), do: nil
 
-  @picker_size 5
+  attr :items, :list, required: true, doc: "list of {value, display} tuples"
+  attr :label, :string, required: true
+  attr :picker, :string, required: true
+  attr :pick_event, :string, required: true
+  attr :show, :boolean, required: true
+  attr :offset, :integer, required: true
+  attr :target, :any, required: true
+  attr :empty_message, :string, default: "No more items."
 
-  defp picker_validators(saved_validators, already_added, offset) do
-    already_set = MapSet.new(already_added, &String.trim/1)
+  defp picker(assigns) do
+    visible = Enum.slice(assigns.items, assigns.offset, @picker_size)
+    has_more = length(assigns.items) > assigns.offset + @picker_size
+    assigns = assign(assigns, visible: visible, has_more: has_more)
 
-    available =
-      Enum.reject(saved_validators, fn v ->
-        label = validator_label(v)
-        MapSet.member?(already_set, label)
-      end)
-
-    Enum.slice(available, offset, @picker_size)
+    ~H"""
+    <div>
+      <button
+        type="button"
+        phx-click="toggle_picker"
+        phx-value-picker={@picker}
+        phx-target={@target}
+        class="btn btn-soft btn-sm mb-2 w-full"
+      >
+        <.icon name={if @show, do: "hero-chevron-up", else: "hero-chevron-down"} class="size-4" />
+        {@label}
+      </button>
+      <div :if={@show} class="bg-base-300 rounded-lg p-2 space-y-1">
+        <div
+          :for={{value, display} <- @visible}
+          class="flex items-center justify-between bg-base-100 rounded px-2 py-1"
+        >
+          <span class="font-mono text-sm truncate" title={value}>
+            {display}
+          </span>
+          <button
+            type="button"
+            phx-click={@pick_event}
+            phx-value-item={value}
+            phx-target={@target}
+            class="btn btn-ghost btn-xs text-success"
+            title="Select"
+          >
+            <.icon name="hero-arrow-left" class="size-4" />
+          </button>
+        </div>
+        <div :if={@visible == []} class="text-xs opacity-50 text-center py-2">
+          {@empty_message}
+        </div>
+        <div class="flex justify-between mt-1">
+          <button
+            type="button"
+            phx-click="picker_prev"
+            phx-value-picker={@picker}
+            phx-target={@target}
+            class="btn btn-ghost btn-xs"
+            disabled={@offset == 0}
+          >
+            <.icon name="hero-chevron-up" class="size-3" /> Prev
+          </button>
+          <button
+            type="button"
+            phx-click="picker_next"
+            phx-value-picker={@picker}
+            phx-target={@target}
+            class="btn btn-ghost btn-xs"
+            disabled={not @has_more}
+          >
+            Next <.icon name="hero-chevron-down" class="size-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+    """
   end
 
-  defp picker_has_more?(saved_validators, already_added, offset) do
-    already_set = MapSet.new(already_added, &String.trim/1)
+  defp validator_picker_items(saved_validators, already_added) do
+    excluded = MapSet.new(already_added, &String.trim/1)
 
-    available =
-      Enum.reject(saved_validators, fn v ->
-        label = validator_label(v)
-        MapSet.member?(already_set, label)
-      end)
-
-    length(available) > offset + @picker_size
+    saved_validators
+    |> Enum.reject(fn v -> MapSet.member?(excluded, validator_value(v)) end)
+    |> Enum.map(fn v -> {validator_value(v), validator_display(v)} end)
   end
 
-  defp validator_label(v) do
+  defp endpoint_picker_items(saved_endpoints) do
+    Enum.map(saved_endpoints, fn ep ->
+      url = Ethercoaster.EndpointRecord.url(ep)
+      {url, url}
+    end)
+  end
+
+  defp validator_value(v) do
     cond do
       is_binary(v.public_key) and v.public_key != "" -> v.public_key
       is_integer(v.index) -> Integer.to_string(v.index)
@@ -228,7 +307,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     end
   end
 
-  defp display_short(v) do
+  defp validator_display(v) do
     cond do
       is_binary(v.public_key) and String.starts_with?(v.public_key, "0x") ->
         String.slice(v.public_key, 0, 10) <> "…" <> String.slice(v.public_key, -6, 6)
@@ -299,58 +378,16 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
             </div>
 
             <div :if={@saved_validators != []} class="w-64 shrink-0">
-              <button
-                type="button"
-                phx-click="toggle_picker"
-                phx-target={@myself}
-                class="btn btn-soft btn-sm mb-2 w-full"
-              >
-                <.icon name={if @show_picker, do: "hero-chevron-up", else: "hero-chevron-down"} class="size-4" />
-                Saved Validators
-              </button>
-              <div :if={@show_picker} class="bg-base-300 rounded-lg p-2 space-y-1">
-                <div
-                  :for={v <- picker_validators(@saved_validators, @validators, @picker_offset)}
-                  class="flex items-center justify-between bg-base-100 rounded px-2 py-1"
-                >
-                  <span class="font-mono text-sm truncate" title={validator_label(v)}>
-                    {display_short(v)}
-                  </span>
-                  <button
-                    type="button"
-                    phx-click="pick_validator"
-                    phx-value-validator={validator_label(v)}
-                    phx-target={@myself}
-                    class="btn btn-ghost btn-xs text-success"
-                    title="Add to service"
-                  >
-                    <.icon name="hero-arrow-left" class="size-4" />
-                  </button>
-                </div>
-                <div :if={picker_validators(@saved_validators, @validators, @picker_offset) == []} class="text-xs opacity-50 text-center py-2">
-                  All validators already added.
-                </div>
-                <div class="flex justify-between mt-1">
-                  <button
-                    type="button"
-                    phx-click="picker_prev"
-                    phx-target={@myself}
-                    class="btn btn-ghost btn-xs"
-                    disabled={@picker_offset == 0}
-                  >
-                    <.icon name="hero-chevron-up" class="size-3" /> Prev
-                  </button>
-                  <button
-                    type="button"
-                    phx-click="picker_next"
-                    phx-target={@myself}
-                    class="btn btn-ghost btn-xs"
-                    disabled={not picker_has_more?(@saved_validators, @validators, @picker_offset)}
-                  >
-                    Next <.icon name="hero-chevron-down" class="size-3" />
-                  </button>
-                </div>
-              </div>
+              <.picker
+                items={validator_picker_items(@saved_validators, @validators)}
+                label="Saved Validators"
+                picker="validator"
+                pick_event="pick_validator"
+                show={@show_validator_picker}
+                offset={@validator_picker_offset}
+                target={@myself}
+                empty_message="All validators already added."
+              />
             </div>
           </div>
         </div>
@@ -472,28 +509,28 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
         <div>
           <label class="label">Endpoint (optional)</label>
-          <div class="flex gap-2">
-            <input
-              type="text"
-              value={@endpoint}
-              phx-blur="update_field"
-              phx-value-field="endpoint"
-              phx-target={@myself}
-              class="input input-bordered flex-1"
-              placeholder="http://localhost:5052"
-            />
-            <div :if={@saved_endpoints != []} class="dropdown dropdown-end">
-              <div tabindex="0" role="button" class="btn btn-ghost">
-                <.icon name="hero-server" class="size-4" /> Saved
-                <.icon name="hero-chevron-down" class="size-3" />
-              </div>
-              <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-10 w-64 p-2 shadow-lg">
-                <li :for={ep <- @saved_endpoints}>
-                  <a phx-click="select_endpoint" phx-value-url={Ethercoaster.EndpointRecord.url(ep)} phx-target={@myself}>
-                    {Ethercoaster.EndpointRecord.url(ep)}
-                  </a>
-                </li>
-              </ul>
+          <div class="flex gap-2 items-start">
+            <div class="flex-1">
+              <input
+                type="text"
+                value={@endpoint}
+                phx-blur="update_field"
+                phx-value-field="endpoint"
+                phx-target={@myself}
+                class="input input-bordered w-full"
+                placeholder="http://localhost:5052"
+              />
+            </div>
+            <div :if={@saved_endpoints != []} class="w-64 shrink-0">
+              <.picker
+                items={endpoint_picker_items(@saved_endpoints)}
+                label="Saved Endpoints"
+                picker="endpoint"
+                pick_event="pick_endpoint"
+                show={@show_endpoint_picker}
+                offset={@endpoint_picker_offset}
+                target={@myself}
+              />
             </div>
             <.link navigate={~p"/endpoints"} class="btn btn-ghost">
               <.icon name="hero-cog-6-tooth" class="size-4" /> Manage

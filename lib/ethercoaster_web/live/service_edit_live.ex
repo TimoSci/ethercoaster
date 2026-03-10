@@ -13,7 +13,7 @@ defmodule EthercoasterWeb.ServiceEditLive do
       socket
       |> assign(:service, service)
       |> assign(:form_error, nil)
-      |> assign(:saved_endpoints, Endpoints.list_endpoints())
+      |> assign(:saved_endpoints, endpoints_with_default())
       |> assign(:saved_validators, Validators.list_validators_by_index())
 
     {:ok, socket}
@@ -45,6 +45,32 @@ defmodule EthercoasterWeb.ServiceEditLive do
       </div>
     </div>
     """
+  end
+
+  defp default_endpoint do
+    Application.get_env(:ethercoaster, Ethercoaster.BeaconChain, [])
+    |> Keyword.get(:base_url, "http://localhost:5052")
+  end
+
+  defp endpoints_with_default do
+    alias Ethercoaster.EndpointRecord
+
+    db_endpoints = Endpoints.list_endpoints()
+    default_url = default_endpoint()
+    db_urls = Enum.map(db_endpoints, &EndpointRecord.url/1)
+
+    if default_url in db_urls do
+      db_endpoints
+    else
+      case EndpointRecord.parse_url(default_url) do
+        {:ok, attrs} ->
+          pseudo = %EndpointRecord{id: nil, address: attrs.address, port: attrs.port}
+          [pseudo | db_endpoints]
+
+        _ ->
+          db_endpoints
+      end
+    end
   end
 
   @impl true

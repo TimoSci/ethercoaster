@@ -11,6 +11,27 @@ defmodule EthercoasterWeb.ServiceLive do
     |> Keyword.get(:base_url, "http://localhost:5052")
   end
 
+  defp endpoints_with_default do
+    alias Ethercoaster.EndpointRecord
+
+    db_endpoints = Endpoints.list_endpoints()
+    default_url = default_endpoint()
+    db_urls = Enum.map(db_endpoints, &EndpointRecord.url/1)
+
+    if default_url in db_urls do
+      db_endpoints
+    else
+      case EndpointRecord.parse_url(default_url) do
+        {:ok, attrs} ->
+          pseudo = %EndpointRecord{id: nil, address: attrs.address, port: attrs.port}
+          [pseudo | db_endpoints]
+
+        _ ->
+          db_endpoints
+      end
+    end
+  end
+
   defp effective_endpoint(service) do
     service.endpoint || default_endpoint()
   end
@@ -47,7 +68,7 @@ defmodule EthercoasterWeb.ServiceLive do
       |> assign(:form_error, nil)
       |> assign(:endpoint_status, endpoint_status)
       |> assign(:default_endpoint, default_endpoint())
-      |> assign(:saved_endpoints, Endpoints.list_endpoints())
+      |> assign(:saved_endpoints, endpoints_with_default())
       |> assign(:saved_validators, Validators.list_validators_by_index())
 
     {:ok, socket}
@@ -162,7 +183,7 @@ defmodule EthercoasterWeb.ServiceLive do
           |> assign(:services, services)
           |> assign(:worker_states, worker_states)
           |> assign(:endpoint_status, endpoint_status)
-          |> assign(:saved_endpoints, Endpoints.list_endpoints())
+          |> assign(:saved_endpoints, endpoints_with_default())
           |> assign(:form_error, nil)
           |> put_flash(:info, "Service created")
 
