@@ -5,7 +5,7 @@ defmodule Ethercoaster.Service.Worker do
 
   alias Ethercoaster.{Services, Validators}
   alias Ethercoaster.Validator.Cache
-  alias Ethercoaster.BeaconChain.{Beacon, Node, Rewards}
+  alias Ethercoaster.BeaconChain.{Beacon, Client, Node, Rewards}
 
   @slots_per_epoch 32
   @max_log_entries 50
@@ -54,6 +54,7 @@ defmodule Ethercoaster.Service.Worker do
   @impl true
   def handle_continue(:setup, state) do
     service = Services.get_service!(state.service_id)
+    Client.put_base_url(service.endpoint)
 
     case resolve_epoch_range(service) do
       {:ok, from_epoch, to_epoch} ->
@@ -154,12 +155,15 @@ defmodule Ethercoaster.Service.Worker do
     # Group batch items by {validator_id, category}
     groups = Enum.group_by(batch, fn {validator, _epoch, category} -> {validator.id, category} end)
 
+    endpoint = state.endpoint
+
     tasks =
       Enum.map(groups, fn {{_vid, category}, items} ->
         validator = elem(hd(items), 0)
         epochs = Enum.map(items, &elem(&1, 1))
 
         Task.async(fn ->
+          Client.put_base_url(endpoint)
           fetch_and_store(validator, epochs, category, state.genesis_time)
         end)
       end)
@@ -281,9 +285,13 @@ defmodule Ethercoaster.Service.Worker do
       |> Application.get_env(Ethercoaster.BeaconChain, [])
       |> Keyword.get(:max_concurrency, 16)
 
+    base_url = Client.get_base_url()
+
     epochs
     |> Task.async_stream(
       fn epoch ->
+        Client.put_base_url(base_url)
+
         case Beacon.get_attestation_rewards(Integer.to_string(epoch), [index_str]) do
           {:ok, %{"total_rewards" => [reward | _]}} ->
             {:ok,

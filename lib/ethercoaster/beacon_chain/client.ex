@@ -8,8 +8,27 @@ defmodule Ethercoaster.BeaconChain.Client do
 
   alias Ethercoaster.BeaconChain.Error
 
+  @base_url_key :beacon_chain_base_url
+
+  @doc """
+  Sets a per-process base URL override for beacon chain API calls.
+
+  This is used by the service worker to direct requests to a service-specific
+  endpoint. The override applies only to the current process.
+  """
+  def put_base_url(nil), do: :ok
+  def put_base_url(url), do: Process.put(@base_url_key, url)
+
+  @doc """
+  Returns the current per-process base URL override, or nil.
+  """
+  def get_base_url, do: Process.get(@base_url_key)
+
   @doc """
   Builds a new `Req.Request` from application config.
+
+  If a per-process base URL has been set via `put_base_url/1`, it takes
+  precedence over the application config.
 
   Config keys (under `config :ethercoaster, Ethercoaster.BeaconChain`):
     * `:base_url` — Beacon node URL (default `"http://localhost:5052"`)
@@ -21,7 +40,7 @@ defmodule Ethercoaster.BeaconChain.Client do
   def new do
     config = Application.get_env(:ethercoaster, Ethercoaster.BeaconChain, [])
 
-    base_url = Keyword.get(config, :base_url, "http://localhost:5052")
+    base_url = Process.get(@base_url_key) || Keyword.get(config, :base_url, "http://localhost:5052")
     api_key = Keyword.get(config, :api_key)
     receive_timeout = Keyword.get(config, :receive_timeout, 15_000)
     req_options = Keyword.get(config, :req_options, [])

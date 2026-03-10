@@ -3,7 +3,7 @@ defmodule Ethercoaster.BeaconChain.Rewards do
   Higher-level reward fetching functions that compose multiple beacon chain API calls.
   """
 
-  alias Ethercoaster.BeaconChain.Beacon
+  alias Ethercoaster.BeaconChain.{Beacon, Client}
   alias Ethercoaster.BeaconChain.Validator, as: ValidatorAPI
 
   @doc """
@@ -18,12 +18,15 @@ defmodule Ethercoaster.BeaconChain.Rewards do
   def fetch_proposal_rewards(epochs, validator_index) do
     max_concurrency = get_max_concurrency()
     index_str = to_string(validator_index)
+    base_url = Client.get_base_url()
 
     # Pass 1: find slots where this validator is the proposer
     assigned_slots =
       epochs
       |> Task.async_stream(
         fn epoch ->
+          Client.put_base_url(base_url)
+
           case ValidatorAPI.get_proposer_duties(epoch) do
             {:ok, duties} when is_list(duties) ->
               duties
@@ -52,6 +55,8 @@ defmodule Ethercoaster.BeaconChain.Rewards do
         assigned_slots
         |> Task.async_stream(
           fn %{epoch: epoch, slot: slot} ->
+            Client.put_base_url(base_url)
+
             case Beacon.get_block_rewards(slot) do
               {:ok, %{"proposer_index" => _, "total" => total}} ->
                 {:ok, %{epoch: epoch, slot: slot, total: parse_int(total)}}
