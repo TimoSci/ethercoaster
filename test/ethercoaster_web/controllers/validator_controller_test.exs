@@ -54,21 +54,21 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
     end)
   end
 
-  describe "GET /validator/query" do
+  describe "GET /validators/query" do
     test "renders the query form", %{conn: conn} do
-      conn = get(conn, ~p"/validator/query")
+      conn = get(conn, ~p"/validators/query")
       response = html_response(conn, 200)
       assert response =~ "Validator Rewards Query"
       assert response =~ "Query All Consensus"
     end
   end
 
-  describe "POST /validator/query with attestation" do
+  describe "POST /validators/query with attestation" do
     test "renders attestation results", %{conn: conn} do
       stub_successful_query()
 
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "3200", "category" => "attestation"}
         })
 
@@ -80,12 +80,12 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
     end
   end
 
-  describe "POST /validator/query with all" do
+  describe "POST /validators/query with all" do
     test "renders all categories", %{conn: conn} do
       stub_successful_query()
 
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "3200", "category" => "all"}
         })
 
@@ -98,12 +98,12 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
     end
   end
 
-  describe "POST /validator/query with last_n_epochs" do
+  describe "POST /validators/query with last_n_epochs" do
     test "renders results for last N epochs", %{conn: conn} do
       stub_successful_query()
 
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{"pubkey" => @pubkey, "last_n_epochs" => "10", "category" => "attestation"}
         })
 
@@ -114,12 +114,12 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
     end
   end
 
-  describe "POST /validator/query with epoch range" do
+  describe "POST /validators/query with epoch range" do
     test "renders results for epoch range", %{conn: conn} do
       stub_successful_query()
 
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{
             "pubkey" => @pubkey,
             "from_epoch" => "50",
@@ -135,10 +135,10 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
     end
   end
 
-  describe "POST /validator/query error cases" do
+  describe "POST /validators/query error cases" do
     test "renders error for invalid pubkey", %{conn: conn} do
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{"pubkey" => "not-a-key", "last_n_slots" => "100", "category" => "attestation"}
         })
 
@@ -147,7 +147,7 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
 
     test "renders error for invalid slot count", %{conn: conn} do
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "0", "category" => "attestation"}
         })
 
@@ -156,7 +156,7 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
 
     test "renders error for too many slots", %{conn: conn} do
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "200000", "category" => "attestation"}
         })
 
@@ -165,7 +165,7 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
 
     test "renders error for invalid epoch count", %{conn: conn} do
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{"pubkey" => @pubkey, "last_n_epochs" => "0", "category" => "attestation"}
         })
 
@@ -176,7 +176,7 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
       stub_successful_query()
 
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{
             "pubkey" => @pubkey,
             "from_epoch" => "60",
@@ -190,7 +190,7 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
 
     test "renders error for no input provided", %{conn: conn} do
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{"pubkey" => @pubkey, "category" => "attestation"}
         })
 
@@ -209,7 +209,7 @@ defmodule EthercoasterWeb.ValidatorControllerTest do
       end)
 
       conn =
-        post(conn, ~p"/validator/query", %{
+        post(conn, ~p"/validators/query", %{
           "validator_query" => %{"pubkey" => @pubkey, "last_n_slots" => "100", "category" => "attestation"}
         })
 

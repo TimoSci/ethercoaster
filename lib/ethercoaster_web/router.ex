@@ -17,8 +17,8 @@ defmodule EthercoasterWeb.Router do
   scope "/", EthercoasterWeb do
     pipe_through :browser
 
-    get "/validator/query", ValidatorController, :query
-    post "/validator/query", ValidatorController, :query
+    get "/validators/query", ValidatorController, :query
+    post "/validators/query", ValidatorController, :query
 
     live_session :default,
       on_mount: [EthercoasterWeb.Hooks.SetPath],

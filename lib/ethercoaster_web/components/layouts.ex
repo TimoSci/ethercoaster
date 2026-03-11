@@ -35,7 +35,7 @@ defmodule EthercoasterWeb.Layouts do
             <a href="/services" class="btn btn-ghost">Services</a>
           </li>
           <li>
-            <a href="/validator/query" class="btn btn-ghost">Query</a>
+            <a href="/validators/query" class="btn btn-ghost">Query</a>
           </li>
           <li>
             <.theme_toggle />

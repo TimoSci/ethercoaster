@@ -3,7 +3,7 @@
   <:subtitle>Query consensus-layer rewards for a validator over a range of epochs.</:subtitle>
 </.header>
 
-<.form for={@form} action={~p"/validator/query"} method="post" class="mt-4 space-y-4">
+<.form for={@form} action={~p"/validators/query"} method="post" class="mt-4 space-y-4">
   <.input field={@form[:pubkey]} type="text" label="Validator Public Key" placeholder="0x..." />
 
   <.input field={@form[:last_n_slots]} type="number" label="Last N Slots" placeholder="3200" min="1" max="100000" />
