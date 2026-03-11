@@ -43,3 +43,9 @@ setenv.sh
 
 # Private endpoint configuration (see endpoints.example.exs)
 /priv/repo/endpoints.exs
+
+# OS files
+.DS_Store
+
+# Superpowers brainstorm artifacts
+.superpowers/
