@@ -84,7 +84,9 @@ defmodule EthercoasterWeb.Layouts do
     ~H"""
     <nav class="breadcrumbs px-4 sm:px-6 lg:px-8 text-sm">
       <ul>
-        <li><a href="/">Home</a></li>
+        <li :if={@crumbs != []}>
+          <a href="/">Home</a>
+        </li>
         <li :for={crumb <- @crumbs}>
           <a href={crumb.href}>{crumb.label}</a>
         </li>
