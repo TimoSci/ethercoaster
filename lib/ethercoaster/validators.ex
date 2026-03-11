@@ -189,13 +189,13 @@ defmodule Ethercoaster.Validators do
   def list_supergroups do
     ValidatorSupergroup
     |> order_by([s], asc: s.name)
-    |> preload([:groups, :children])
+    |> preload([groups: :validators, children: []])
     |> Repo.all()
   end
 
   def get_supergroup!(id) do
     ValidatorSupergroup
-    |> preload([:groups, :children])
+    |> preload([groups: :validators, children: []])
     |> Repo.get!(id)
   end
 
