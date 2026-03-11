@@ -177,6 +177,9 @@ defmodule EthercoasterWeb.GroupsLive do
                 <span class="badge badge-sm ml-2">
                   {length(sg.groups)} groups
                 </span>
+                <span class="badge badge-sm ml-1">
+                  {supergroup_validator_count(sg.id)} validators
+                </span>
                 <span :if={sg.children != []} class="badge badge-sm badge-outline ml-1">
                   {length(sg.children)} sub
                 </span>
@@ -460,6 +463,10 @@ defmodule EthercoasterWeb.GroupsLive do
     Enum.reject(supergroups, fn sg ->
       sg.id == current.id or MapSet.member?(existing_ids, sg.id)
     end)
+  end
+
+  defp supergroup_validator_count(supergroup_id) do
+    length(Validators.supergroup_validators(supergroup_id))
   end
 
   defp supergroup_all_validators(supergroup_id) do
