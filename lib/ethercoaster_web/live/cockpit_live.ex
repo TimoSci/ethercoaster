@@ -20,6 +20,7 @@ defmodule EthercoasterWeb.CockpitLive do
       |> assign(:validator_count, length(validators))
       |> assign(:validator_states, validator_state_breakdown(validators))
       |> assign(:group_count, length(groups))
+      |> assign(:supergroup_count, length(Validators.list_supergroups()))
 
     {:ok, socket}
   end
@@ -90,7 +91,7 @@ defmodule EthercoasterWeb.CockpitLive do
         <div class="card-body">
           <h2 class="card-title">Validator Groups</h2>
           <p class="text-3xl font-bold">{@group_count}</p>
-          <p class="text-sm opacity-70">More coming soon</p>
+          <p class="text-sm opacity-70">{@supergroup_count} supergroups</p>
         </div>
       </a>
 

@@ -6,6 +6,7 @@ defmodule Ethercoaster.Validators do
   alias Ethercoaster.Repo
   alias Ethercoaster.ValidatorRecord
   alias Ethercoaster.ValidatorGroup
+  alias Ethercoaster.ValidatorSupergroup
   alias Ethercoaster.BeaconChain.Beacon
 
   def list_validators do
@@ -181,6 +182,164 @@ defmodule Ethercoaster.Validators do
     |> Repo.update!()
 
     :ok
+  end
+
+  # --- Supergroups ---
+
+  def list_supergroups do
+    ValidatorSupergroup
+    |> order_by([s], asc: s.name)
+    |> preload([:groups, :children])
+    |> Repo.all()
+  end
+
+  def get_supergroup!(id) do
+    ValidatorSupergroup
+    |> preload([:groups, :children])
+    |> Repo.get!(id)
+  end
+
+  def create_supergroup(attrs) do
+    %ValidatorSupergroup{}
+    |> ValidatorSupergroup.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def rename_supergroup(%ValidatorSupergroup{} = supergroup, attrs) do
+    supergroup
+    |> ValidatorSupergroup.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_supergroup(id) do
+    Repo.get!(ValidatorSupergroup, id) |> Repo.delete()
+  end
+
+  def add_group_to_supergroup(supergroup_id, group_id) do
+    supergroup = get_supergroup!(supergroup_id)
+    group = get_group!(group_id)
+
+    existing_ids = MapSet.new(supergroup.groups, & &1.id)
+
+    unless MapSet.member?(existing_ids, group.id) do
+      groups = supergroup.groups ++ [group]
+
+      supergroup
+      |> Ecto.Changeset.change()
+      |> Ecto.Changeset.put_assoc(:groups, groups)
+      |> Repo.update!()
+    end
+
+    :ok
+  end
+
+  def remove_group_from_supergroup(supergroup_id, group_id) do
+    supergroup = get_supergroup!(supergroup_id)
+    groups = Enum.reject(supergroup.groups, &(&1.id == group_id))
+
+    supergroup
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.put_assoc(:groups, groups)
+    |> Repo.update!()
+
+    :ok
+  end
+
+  @doc """
+  Adds a child supergroup to a parent supergroup.
+  Returns {:error, :circular_reference} if this would create a cycle.
+  """
+  def add_child_supergroup(parent_id, child_id) do
+    if parent_id == child_id do
+      {:error, :circular_reference}
+    else
+      if ancestor_of?(child_id, parent_id) do
+        {:error, :circular_reference}
+      else
+        parent = get_supergroup!(parent_id)
+        child = get_supergroup!(child_id)
+
+        existing_ids = MapSet.new(parent.children, & &1.id)
+
+        unless MapSet.member?(existing_ids, child.id) do
+          children = parent.children ++ [child]
+
+          parent
+          |> Ecto.Changeset.change()
+          |> Ecto.Changeset.put_assoc(:children, children)
+          |> Repo.update!()
+        end
+
+        :ok
+      end
+    end
+  end
+
+  def remove_child_supergroup(parent_id, child_id) do
+    parent = get_supergroup!(parent_id)
+    children = Enum.reject(parent.children, &(&1.id == child_id))
+
+    parent
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.put_assoc(:children, children)
+    |> Repo.update!()
+
+    :ok
+  end
+
+  @doc """
+  Returns all unique validators across all groups and child supergroups (recursively).
+  """
+  def supergroup_validators(supergroup_id) do
+    supergroup_validators(supergroup_id, MapSet.new())
+  end
+
+  defp supergroup_validators(supergroup_id, visited) do
+    if MapSet.member?(visited, supergroup_id) do
+      []
+    else
+      visited = MapSet.put(visited, supergroup_id)
+      supergroup = get_supergroup!(supergroup_id)
+
+      # Validators from direct groups (need to preload validators on groups)
+      group_validators =
+        supergroup.groups
+        |> Enum.map(& get_group!(&1.id))
+        |> Enum.flat_map(& &1.validators)
+
+      # Validators from child supergroups (recursive)
+      child_validators =
+        supergroup.children
+        |> Enum.flat_map(& supergroup_validators(&1.id, visited))
+
+      (group_validators ++ child_validators)
+      |> Enum.uniq_by(& &1.id)
+    end
+  end
+
+  @doc """
+  Checks if `potential_ancestor_id` is an ancestor of `supergroup_id`.
+  Used to prevent circular references.
+  """
+  def ancestor_of?(potential_ancestor_id, supergroup_id) do
+    ancestor_of?(potential_ancestor_id, supergroup_id, MapSet.new())
+  end
+
+  defp ancestor_of?(_potential_ancestor_id, _supergroup_id, visited)
+       when map_size(visited) > 1000,
+       do: true
+
+  defp ancestor_of?(potential_ancestor_id, supergroup_id, visited) do
+    if MapSet.member?(visited, supergroup_id) do
+      false
+    else
+      visited = MapSet.put(visited, supergroup_id)
+      supergroup = get_supergroup!(potential_ancestor_id)
+
+      Enum.any?(supergroup.children, fn child ->
+        child.id == supergroup_id or ancestor_of?(child.id, supergroup_id, visited)
+      end)
+    end
   end
 
   @doc """
