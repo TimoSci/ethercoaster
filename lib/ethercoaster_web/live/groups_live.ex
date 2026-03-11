@@ -468,14 +468,14 @@ defmodule EthercoasterWeb.GroupsLive do
 
   defp display_validator(v) do
     cond do
+      is_integer(v.index) ->
+        "#{v.index}"
+
       is_binary(v.public_key) and String.starts_with?(v.public_key, "0x") ->
         String.slice(v.public_key, 0, 10) <> "…" <> String.slice(v.public_key, -6, 6)
 
       is_binary(v.public_key) and v.public_key != "" ->
         v.public_key
-
-      is_integer(v.index) ->
-        "#{v.index}"
 
       true ->
         "?"
