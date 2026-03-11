@@ -15,6 +15,7 @@ defmodule EthercoasterWeb.ServiceEditLive do
       |> assign(:form_error, nil)
       |> assign(:saved_endpoints, endpoints_with_default())
       |> assign(:saved_validators, Validators.list_validators_by_index())
+      |> assign(:saved_groups, Validators.list_groups())
 
     {:ok, socket}
   end
@@ -41,6 +42,7 @@ defmodule EthercoasterWeb.ServiceEditLive do
           form_error={@form_error}
           saved_endpoints={@saved_endpoints}
           saved_validators={@saved_validators}
+          saved_groups={@saved_groups}
         />
       </div>
     </div>

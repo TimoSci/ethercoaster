@@ -24,6 +24,8 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
       |> assign(:initialized, false)
       |> assign(:show_validator_picker, false)
       |> assign(:validator_picker_offset, 0)
+      |> assign(:show_group_picker, false)
+      |> assign(:group_picker_offset, 0)
       |> assign(:show_endpoint_picker, false)
       |> assign(:endpoint_picker_offset, 0)
       |> allow_upload(:validator_file, accept: ~w(.csv .json), max_entries: 1)
@@ -36,6 +38,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     socket = assign(socket, :form_error, assigns[:form_error])
     socket = assign(socket, :saved_endpoints, assigns[:saved_endpoints] || [])
     socket = assign(socket, :saved_validators, assigns[:saved_validators] || [])
+    socket = assign(socket, :saved_groups, assigns[:saved_groups] || [])
 
     # On first update, populate fields from service if editing
     if not socket.assigns.initialized do
@@ -143,6 +146,10 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     {:noreply, assign(socket, :show_validator_picker, !socket.assigns.show_validator_picker)}
   end
 
+  def handle_event("toggle_picker", %{"picker" => "group"}, socket) do
+    {:noreply, assign(socket, :show_group_picker, !socket.assigns.show_group_picker)}
+  end
+
   def handle_event("toggle_picker", %{"picker" => "endpoint"}, socket) do
     {:noreply, assign(socket, :show_endpoint_picker, !socket.assigns.show_endpoint_picker)}
   end
@@ -151,12 +158,20 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     {:noreply, assign(socket, :validator_picker_offset, max(socket.assigns.validator_picker_offset - @picker_size, 0))}
   end
 
+  def handle_event("picker_prev", %{"picker" => "group"}, socket) do
+    {:noreply, assign(socket, :group_picker_offset, max(socket.assigns.group_picker_offset - @picker_size, 0))}
+  end
+
   def handle_event("picker_prev", %{"picker" => "endpoint"}, socket) do
     {:noreply, assign(socket, :endpoint_picker_offset, max(socket.assigns.endpoint_picker_offset - @picker_size, 0))}
   end
 
   def handle_event("picker_next", %{"picker" => "validator"}, socket) do
     {:noreply, assign(socket, :validator_picker_offset, socket.assigns.validator_picker_offset + @picker_size)}
+  end
+
+  def handle_event("picker_next", %{"picker" => "group"}, socket) do
+    {:noreply, assign(socket, :group_picker_offset, socket.assigns.group_picker_offset + @picker_size)}
   end
 
   def handle_event("picker_next", %{"picker" => "endpoint"}, socket) do
@@ -171,6 +186,25 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     else
       validators = existing ++ [value]
       {:noreply, assign(socket, validators: validators)}
+    end
+  end
+
+  def handle_event("pick_group", %{"item" => group_id}, socket) do
+    group = Enum.find(socket.assigns.saved_groups, &(Integer.to_string(&1.id) == group_id))
+
+    if group do
+      existing = MapSet.new(socket.assigns.validators, &String.trim/1)
+
+      new_vals =
+        group.validators
+        |> Enum.map(&validator_value/1)
+        |> Enum.reject(&MapSet.member?(existing, &1))
+
+      validators = Enum.reject(socket.assigns.validators, &(&1 == "")) ++ new_vals
+      validators = if validators == [], do: [""], else: validators
+      {:noreply, assign(socket, :validators, validators)}
+    else
+      {:noreply, socket}
     end
   end
 
@@ -292,6 +326,13 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     |> Enum.map(fn v -> {validator_value(v), validator_display(v)} end)
   end
 
+  defp group_picker_items(saved_groups) do
+    Enum.map(saved_groups, fn g ->
+      count = length(g.validators)
+      {Integer.to_string(g.id), "#{g.name} (#{count})"}
+    end)
+  end
+
   defp endpoint_picker_items(saved_endpoints) do
     Enum.map(saved_endpoints, fn ep ->
       url = Ethercoaster.EndpointRecord.url(ep)
@@ -377,8 +418,9 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
               <p :if={@upload_error} class="text-error text-sm mt-1">{@upload_error}</p>
             </div>
 
-            <div :if={@saved_validators != []} class="w-64 shrink-0">
+            <div :if={@saved_validators != [] || @saved_groups != []} class="w-64 shrink-0 space-y-2">
               <.picker
+                :if={@saved_validators != []}
                 items={validator_picker_items(@saved_validators, @validators)}
                 label="Saved Validators"
                 picker="validator"
@@ -387,6 +429,17 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
                 offset={@validator_picker_offset}
                 target={@myself}
                 empty_message="All validators already added."
+              />
+              <.picker
+                :if={@saved_groups != []}
+                items={group_picker_items(@saved_groups)}
+                label="Saved Validator Groups"
+                picker="group"
+                pick_event="pick_group"
+                show={@show_group_picker}
+                offset={@group_picker_offset}
+                target={@myself}
+                empty_message="No groups available."
               />
             </div>
           </div>

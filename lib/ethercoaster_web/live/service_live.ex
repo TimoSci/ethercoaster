@@ -77,6 +77,7 @@ defmodule EthercoasterWeb.ServiceLive do
       |> assign(:default_endpoint, default_endpoint())
       |> assign(:saved_endpoints, endpoints_with_default())
       |> assign(:saved_validators, validators_by_index)
+      |> assign(:saved_groups, Validators.list_groups())
       |> assign(:progress_map_validators, validators_by_index)
       |> assign(:progress_map_days, @progress_map_days)
       |> assign(:progress_map_dates, progress_map_dates)
@@ -173,7 +174,7 @@ defmodule EthercoasterWeb.ServiceLive do
         <input type="checkbox" />
         <div class="collapse-title text-lg font-semibold">Create Service</div>
         <div class="collapse-content">
-          <.live_component module={EthercoasterWeb.ServiceLive.FormComponent} id="service-form" form_error={@form_error} saved_endpoints={@saved_endpoints} saved_validators={@saved_validators} />
+          <.live_component module={EthercoasterWeb.ServiceLive.FormComponent} id="service-form" form_error={@form_error} saved_endpoints={@saved_endpoints} saved_validators={@saved_validators} saved_groups={@saved_groups} />
         </div>
       </div>
 
