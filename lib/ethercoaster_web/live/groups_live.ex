@@ -283,22 +283,22 @@ defmodule EthercoasterWeb.GroupsLive do
               </div>
             </div>
 
-            <%!-- Expanded: show all resolved validators --%>
-            <div :if={@expanded_supergroup_id == sg.id} class="mt-3 pt-2 border-t border-base-300">
-              <p class="text-xs font-semibold opacity-60 mb-1">
-                All validators ({length(supergroup_all_validators(sg.id))}):
-              </p>
-              <div class="flex flex-wrap gap-1">
-                <span
-                  :for={v <- supergroup_all_validators(sg.id)}
-                  class="badge badge-sm badge-outline font-mono"
-                >
-                  {display_validator(v)}
-                </span>
-                <span :if={supergroup_all_validators(sg.id) == []} class="text-xs opacity-50">
-                  No validators
-                </span>
+            <%!-- Expanded: show validators by group --%>
+            <div :if={@expanded_supergroup_id == sg.id} class="mt-3 pt-2 border-t border-base-300 space-y-2">
+              <div :for={g <- supergroup_groups_with_validators(sg.id)} :if={g.validators != []}>
+                <p class="text-xs font-semibold opacity-60 mb-1">{g.name}</p>
+                <div class="flex flex-wrap gap-1">
+                  <span
+                    :for={v <- g.validators}
+                    class="badge badge-sm badge-outline font-mono"
+                  >
+                    {display_validator(v)}
+                  </span>
+                </div>
               </div>
+              <span :if={supergroup_validator_count(sg.id) == 0} class="text-xs opacity-50">
+                No validators
+              </span>
             </div>
           </div>
 
@@ -469,8 +469,17 @@ defmodule EthercoasterWeb.GroupsLive do
     length(Validators.supergroup_validators(supergroup_id))
   end
 
-  defp supergroup_all_validators(supergroup_id) do
-    Validators.supergroup_validators(supergroup_id)
+  defp supergroup_groups_with_validators(supergroup_id) do
+    sg = Validators.get_supergroup!(supergroup_id)
+
+    direct_groups = Enum.map(sg.groups, fn g -> Validators.get_group!(g.id) end)
+
+    child_groups =
+      sg.children
+      |> Enum.flat_map(fn child -> supergroup_groups_with_validators(child.id) end)
+
+    (direct_groups ++ child_groups)
+    |> Enum.uniq_by(& &1.id)
   end
 
   defp display_validator(v) do
