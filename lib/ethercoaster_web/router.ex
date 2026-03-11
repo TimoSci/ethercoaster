@@ -22,12 +22,16 @@ defmodule EthercoasterWeb.Router do
     get "/validator/query", ValidatorController, :query
     post "/validator/query", ValidatorController, :query
 
-    live "/services", ServiceLive
-    live "/services/progress_map", ProgressMapLive
-    live "/services/:id/edit", ServiceEditLive
-    live "/transaction_types", TransactionTypesLive
-    live "/endpoints", EndpointsLive
-    live "/validators", ValidatorsLive
+    live_session :default,
+      on_mount: [EthercoasterWeb.Hooks.SetPath],
+      layout: {EthercoasterWeb.Layouts, :app} do
+      live "/services", ServiceLive
+      live "/services/progress_map", ProgressMapLive
+      live "/services/:id/edit", ServiceEditLive
+      live "/transaction_types", TransactionTypesLive
+      live "/endpoints", EndpointsLive
+      live "/validators", ValidatorsLive
+    end
   end
 
   # Other scopes may use custom stacks.

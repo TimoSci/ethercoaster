@@ -5,6 +5,9 @@ defmodule EthercoasterWeb.ValidatorController do
 
   alias Ethercoaster.Validator
 
+  plug :put_layout, html: {EthercoasterWeb.Layouts, :app}
+  plug :assign_current_path
+
   @valid_categories ~w(attestation sync_committee block_proposal all)
 
   def query(conn, %{"validator_query" => params}) do
@@ -100,4 +103,8 @@ defmodule EthercoasterWeb.ValidatorController do
   end
 
   defp parse_categories(_), do: {:error, "Invalid category."}
+
+  defp assign_current_path(conn, _opts) do
+    assign(conn, :current_path, conn.request_path)
+  end
 end

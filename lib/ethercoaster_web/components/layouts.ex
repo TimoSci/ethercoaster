@@ -14,24 +14,11 @@ defmodule EthercoasterWeb.Layouts do
   @doc """
   Renders your app layout.
 
-  This function is typically invoked from every template,
-  and it often contains your application menu, sidebar,
-  or similar.
-
-  ## Examples
-
-      <Layouts.app flash={@flash}>
-        <h1>Content</h1>
-      </Layouts.app>
-
+  Used as the inner layout for all pages (except the home page).
+  Includes navbar, breadcrumb navigation, flash messages, and main content area.
   """
-  attr :flash, :map, required: true, doc: "the map of flash messages"
-
-  attr :current_scope, :map,
-    default: nil,
-    doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
-
-  slot :inner_block, required: true
+  attr :flash, :map, default: %{}, doc: "the map of flash messages"
+  attr :current_path, :string, default: "/", doc: "the current request path"
 
   def app(assigns) do
     ~H"""
@@ -53,23 +40,69 @@ defmodule EthercoasterWeb.Layouts do
           <li>
             <.theme_toggle />
           </li>
-          <li>
-            <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
         </ul>
       </div>
     </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
+    <.breadcrumbs path={@current_path} />
+
+    <main class="px-4 py-4 sm:px-6 lg:px-8">
       <div class="mx-auto max-w-5xl space-y-4">
-        {render_slot(@inner_block)}
+        {@inner_content}
       </div>
     </main>
 
     <.flash_group flash={@flash} />
     """
+  end
+
+  @doc """
+  Renders breadcrumb navigation from the current URL path.
+
+  Generates hierarchical links like "Home > Services > Progress Map"
+  based on the URL path segments.
+  """
+  attr :path, :string, required: true
+
+  def breadcrumbs(assigns) do
+    segments =
+      assigns.path
+      |> String.trim_leading("/")
+      |> String.split("/", trim: true)
+      |> Enum.reject(&dynamic_segment?/1)
+
+    crumbs =
+      segments
+      |> Enum.with_index()
+      |> Enum.map(fn {segment, index} ->
+        href = "/" <> Enum.join(Enum.take(segments, index + 1), "/")
+        %{label: segment_label(segment), href: href}
+      end)
+
+    assigns = assign(assigns, :crumbs, crumbs)
+
+    ~H"""
+    <nav class="breadcrumbs px-4 sm:px-6 lg:px-8 text-sm">
+      <ul>
+        <li><a href="/">Home</a></li>
+        <li :for={crumb <- @crumbs}>
+          <a href={crumb.href}>{crumb.label}</a>
+        </li>
+      </ul>
+    </nav>
+    """
+  end
+
+  defp dynamic_segment?(segment), do: String.match?(segment, ~r/^\d+$/)
+
+  defp segment_label("progress_map"), do: "Progress Map"
+  defp segment_label("transaction_types"), do: "Transaction Types"
+
+  defp segment_label(segment) do
+    segment
+    |> String.replace("_", " ")
+    |> String.split(" ")
+    |> Enum.map_join(" ", &String.capitalize/1)
   end
 
   @doc """
