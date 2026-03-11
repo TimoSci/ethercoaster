@@ -15,9 +15,26 @@ defmodule EthercoasterWeb.ServiceLiveTest do
 
   describe "mount" do
     test "renders the services page", %{conn: conn} do
+      Req.Test.stub(Client, fn conn ->
+        case conn.request_path do
+          "/eth/v1/beacon/genesis" ->
+            Req.Test.json(conn, %{
+              "data" => %{
+                "genesis_time" => "1606824023",
+                "genesis_validators_root" => "0x0000",
+                "genesis_fork_version" => "0x00000000"
+              }
+            })
+
+          _ ->
+            Req.Test.json(conn, %{"data" => %{}})
+        end
+      end)
+
       {:ok, _view, html} = live(conn, "/services")
       assert html =~ "Services"
       assert html =~ "Create Service"
+      assert html =~ "Progress Map"
     end
   end
 

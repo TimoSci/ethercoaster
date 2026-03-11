@@ -5,6 +5,9 @@ defmodule EthercoasterWeb.ServiceLive do
   alias Ethercoaster.Endpoints
   alias Ethercoaster.Validators
   alias Ethercoaster.Service.Manager
+  alias Ethercoaster.ProgressMap
+
+  @progress_map_days 14
 
   defp default_endpoint do
     Application.get_env(:ethercoaster, Ethercoaster.BeaconChain, [])
@@ -61,6 +64,10 @@ defmodule EthercoasterWeb.ServiceLive do
     # endpoint_status: %{service_id => :ok | :error | :checking}
     endpoint_status = Map.new(services, fn s -> {s.id, :checking} end)
 
+    validators_by_index = Validators.list_validators_by_index()
+    progress_map_dates = build_recent_dates(@progress_map_days)
+    progress_map_grid = ProgressMap.scan(validators_by_index, progress_map_dates, ["attestation"])
+
     socket =
       socket
       |> assign(:services, services)
@@ -69,7 +76,11 @@ defmodule EthercoasterWeb.ServiceLive do
       |> assign(:endpoint_status, endpoint_status)
       |> assign(:default_endpoint, default_endpoint())
       |> assign(:saved_endpoints, endpoints_with_default())
-      |> assign(:saved_validators, Validators.list_validators_by_index())
+      |> assign(:saved_validators, validators_by_index)
+      |> assign(:progress_map_validators, validators_by_index)
+      |> assign(:progress_map_days, @progress_map_days)
+      |> assign(:progress_map_dates, progress_map_dates)
+      |> assign(:progress_map_grid, progress_map_grid)
 
     {:ok, socket}
   end
@@ -85,6 +96,24 @@ defmodule EthercoasterWeb.ServiceLive do
         result = check_endpoint(endpoint)
         send(lv, {:endpoint_check, service_id, result})
       end)
+    end
+  end
+
+  defp build_recent_dates(days) do
+    today = Date.utc_today()
+
+    (days - 1)..0//-1
+    |> Enum.map(&Date.add(today, -&1))
+    |> Enum.map(&Date.to_iso8601/1)
+  end
+
+  defp progress_cell_color(nil, _vid, _date), do: "bg-base-300"
+
+  defp progress_cell_color(grid, vid, date) do
+    case get_in(grid, [vid, date]) do
+      :full -> "bg-success"
+      :partial -> "bg-warning/40"
+      _ -> "bg-base-300/50"
     end
   end
 
@@ -109,7 +138,37 @@ defmodule EthercoasterWeb.ServiceLive do
       <:subtitle>Create and manage background validator reward queries.</:subtitle>
     </.header>
 
-    <div class="mt-6 space-y-6">
+    <a href="/services/progress_map" class="card bg-base-200 hover:bg-base-300 transition cursor-pointer mt-6 block">
+      <div class="card-body py-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="card-title text-base">Progress Map</h2>
+            <p class="text-xs opacity-70">
+              {length(@progress_map_validators)} validators &times; {@progress_map_days} days &middot; attestation
+            </p>
+          </div>
+          <span class="text-sm opacity-50">&rsaquo;</span>
+        </div>
+        <div
+          :if={@progress_map_validators != []}
+          class="mt-2 overflow-hidden rounded"
+          style={"display:grid; grid-template-columns:repeat(#{length(@progress_map_validators)}, 1fr);"}
+        >
+          <%= for date <- @progress_map_dates do %>
+            <div
+              :for={v <- @progress_map_validators}
+              class={"h-px #{progress_cell_color(@progress_map_grid, v.id, date)}"}
+            >
+            </div>
+          <% end %>
+        </div>
+        <p :if={@progress_map_validators == []} class="text-xs opacity-50 mt-2">
+          No validators added yet.
+        </p>
+      </div>
+    </a>
+
+    <div class="mt-4 space-y-6">
       <div class="collapse collapse-arrow bg-base-200">
         <input type="checkbox" />
         <div class="collapse-title text-lg font-semibold">Create Service</div>
