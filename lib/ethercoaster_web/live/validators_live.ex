@@ -176,7 +176,9 @@ defmodule EthercoasterWeb.ValidatorsLive do
       <%!-- Right: Groups --%>
       <div>
         <div class="card bg-base-200 p-6 mb-6">
-          <h3 class="text-lg font-semibold mb-4">Groups</h3>
+          <h3 class="text-lg font-semibold mb-4">
+            <.link navigate={~p"/groups"} class="link link-hover">Groups</.link>
+          </h3>
           <form phx-submit="create_group" class="flex gap-2">
             <input
               type="text"

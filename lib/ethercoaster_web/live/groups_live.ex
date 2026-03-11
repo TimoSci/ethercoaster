@@ -15,6 +15,7 @@ defmodule EthercoasterWeb.GroupsLive do
       |> assign(:renaming_group_id, nil)
       |> assign(:renaming_supergroup_id, nil)
       |> assign(:rename_value, "")
+      |> assign(:expanded_group_id, nil)
       |> assign(:expanded_supergroup_id, nil)
 
     {:ok, socket}
@@ -53,7 +54,16 @@ defmodule EthercoasterWeb.GroupsLive do
             class={"card p-4 transition-colors #{if in_selected_supergroup?(@supergroups, @selected_supergroup_id, group.id), do: "bg-primary/10 ring-1 ring-primary", else: "bg-base-200 hover:bg-base-300"}"}
           >
             <div class="flex items-center justify-between">
-              <div :if={@renaming_group_id != group.id} class="flex-1">
+              <div
+                :if={@renaming_group_id != group.id}
+                phx-click="toggle_expand_group"
+                phx-value-id={group.id}
+                class="flex-1 cursor-pointer"
+              >
+                <.icon
+                  name={if @expanded_group_id == group.id, do: "hero-chevron-down", else: "hero-chevron-right"}
+                  class="size-3 inline-block mr-1 opacity-50"
+                />
                 <span class="font-semibold">{group.name}</span>
                 <span class="badge badge-sm ml-2">{length(group.validators)}</span>
               </div>
@@ -110,7 +120,7 @@ defmodule EthercoasterWeb.GroupsLive do
               </div>
             </div>
 
-            <div :if={group.validators != []} class="mt-2 flex flex-wrap gap-1">
+            <div :if={@expanded_group_id == group.id && group.validators != []} class="mt-2 flex flex-wrap gap-1">
               <span
                 :for={v <- group.validators}
                 class="badge badge-sm badge-outline font-mono"
@@ -118,7 +128,7 @@ defmodule EthercoasterWeb.GroupsLive do
                 {display_validator(v)}
               </span>
             </div>
-            <div :if={group.validators == []} class="mt-1 text-xs opacity-50">
+            <div :if={@expanded_group_id == group.id && group.validators == []} class="mt-1 text-xs opacity-50">
               No validators
             </div>
           </div>
@@ -381,6 +391,12 @@ defmodule EthercoasterWeb.GroupsLive do
       {:error, _} ->
         {:noreply, socket}
     end
+  end
+
+  def handle_event("toggle_expand_group", %{"id" => id}, socket) do
+    group_id = String.to_integer(id)
+    expanded = if socket.assigns.expanded_group_id == group_id, do: nil, else: group_id
+    {:noreply, assign(socket, :expanded_group_id, expanded)}
   end
 
   def handle_event("cancel_rename", _, socket) do
