@@ -1,18 +1,41 @@
 # Ethercoaster
 
-To start your Phoenix server:
+Ethercoaster is an Ethereum validator management dashboard built with Phoenix LiveView. It provides tools for tracking validators, organizing them into groups and supergroups, monitoring beacon chain state, and managing service endpoints.
 
-* Run `mix setup` to install and setup dependencies
-* Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+## Prerequisites
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+- Elixir ~> 1.15
+- PostgreSQL
+- Node.js (for asset building)
 
-Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
+## Setup
 
-## Learn more
+```bash
+mix setup
+```
 
-* Official website: https://www.phoenixframework.org/
-* Guides: https://hexdocs.pm/phoenix/overview.html
-* Docs: https://hexdocs.pm/phoenix
-* Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+This installs dependencies, creates the database, runs migrations, seeds data, and builds assets.
+
+## Running
+
+```bash
+mix phx.server
+```
+
+Then visit [`localhost:4000`](http://localhost:4000).
+
+To run inside IEx:
+
+```bash
+iex -S mix phx.server
+```
+
+## Testing
+
+```bash
+mix test
+```
+
+## Documentation
+
+Detailed guides will be added to the `guides/` directory.
