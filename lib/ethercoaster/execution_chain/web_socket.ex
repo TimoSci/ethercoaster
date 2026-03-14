@@ -44,12 +44,24 @@ defmodule Ethercoaster.ExecutionChain.WebSocket do
     * `:name` — optional GenServer name
   """
   def start_link(opts \\ []) do
+    {url, gen_opts} = parse_opts(opts)
+    GenServer.start_link(__MODULE__, url, gen_opts)
+  end
+
+  @doc """
+  Starts a WebSocket connection without linking to the calling process.
+  """
+  def start(opts \\ []) do
+    {url, gen_opts} = parse_opts(opts)
+    GenServer.start(__MODULE__, url, gen_opts)
+  end
+
+  defp parse_opts(opts) do
     config = Application.get_env(:ethercoaster, Ethercoaster.ExecutionChain, [])
     url = Keyword.get(opts, :url) || Keyword.get(config, :ws_url, "ws://localhost:8546")
     name = Keyword.get(opts, :name)
-
     gen_opts = if name, do: [name: name], else: []
-    GenServer.start_link(__MODULE__, url, gen_opts)
+    {url, gen_opts}
   end
 
   @doc """
@@ -91,19 +103,37 @@ defmodule Ethercoaster.ExecutionChain.WebSocket do
 
     with {:ok, conn} <- Mint.HTTP.connect(http_scheme, uri.host, port, protocols: [:http1]),
          {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, path, []) do
-      state = %__MODULE__{
-        conn: conn,
-        ref: ref,
-        url: url
-      }
-
-      {:ok, state}
+      state = %__MODULE__{conn: conn, ref: ref, url: url}
+      await_upgrade(state)
     else
       {:error, reason} ->
         {:stop, reason}
 
       {:error, _conn, reason} ->
         {:stop, reason}
+    end
+  end
+
+  defp await_upgrade(%{websocket: ws} = state) when not is_nil(ws), do: {:ok, state}
+
+  defp await_upgrade(state) do
+    receive do
+      message ->
+        case Mint.WebSocket.stream(state.conn, message) do
+          {:ok, conn, responses} ->
+            state = %{state | conn: conn}
+            state = handle_responses(state, responses)
+            await_upgrade(state)
+
+          {:error, _conn, reason, _responses} ->
+            {:stop, reason}
+
+          :unknown ->
+            await_upgrade(state)
+        end
+    after
+      5_000 ->
+        {:stop, :upgrade_timeout}
     end
   end
 

@@ -47,7 +47,8 @@ defmodule Ethercoaster.Service.Worker do
       batch_size: default_batch_size(),
       last_batch_ms: nil,
       batch_times: [],
-      batch_started_at: nil
+      batch_started_at: nil,
+      ws_pid: nil
     }
 
     {:ok, state, {:continue, :setup}}
@@ -81,6 +82,21 @@ defmodule Ethercoaster.Service.Worker do
 
         batch_size = service.batch_size || default_batch_size()
 
+        ws_pid =
+          if ExecutionChain.Client.ws_scheme?(service.execution_endpoint) do
+            case ExecutionChain.WebSocket.start(url: service.execution_endpoint) do
+              {:ok, pid} ->
+                Logger.info("Opened WebSocket to #{service.execution_endpoint}")
+                pid
+
+              {:error, reason} ->
+                Logger.warning("Failed to open WebSocket to #{service.execution_endpoint}: #{inspect(reason)}")
+                nil
+            end
+          else
+            nil
+          end
+
         state = %{state |
           status: :running,
           validators: validators,
@@ -91,7 +107,8 @@ defmodule Ethercoaster.Service.Worker do
           consensus_endpoint: service.consensus_endpoint,
           execution_endpoint: service.execution_endpoint,
           categories: categories,
-          batch_size: batch_size
+          batch_size: batch_size,
+          ws_pid: ws_pid
         }
 
         state = add_log(state, "Started — #{length(work_queue)} items to fetch")
@@ -160,6 +177,7 @@ defmodule Ethercoaster.Service.Worker do
 
     consensus_endpoint = state.consensus_endpoint
     execution_endpoint = state.execution_endpoint
+    ws_pid = state.ws_pid
 
     tasks =
       Enum.map(groups, fn {{_vid, category}, items} ->
@@ -169,6 +187,7 @@ defmodule Ethercoaster.Service.Worker do
         Task.async(fn ->
           Client.put_base_url(consensus_endpoint)
           ExecutionChain.Client.put_base_url(execution_endpoint)
+          ExecutionChain.Client.put_ws_pid(ws_pid)
           fetch_and_store(validator, epochs, category, state.genesis_time)
         end)
       end)
@@ -196,6 +215,15 @@ defmodule Ethercoaster.Service.Worker do
 
     send(self(), :process_batch)
     {:noreply, state}
+  end
+
+  @impl true
+  def terminate(_reason, state) do
+    if state.ws_pid && Process.alive?(state.ws_pid) do
+      GenServer.stop(state.ws_pid)
+    end
+
+    :ok
   end
 
   # --- Private helpers ---
@@ -393,11 +421,13 @@ defmodule Ethercoaster.Service.Worker do
 
   defp fetch_execution_rewards(proposals) do
     execution_url = ExecutionChain.Client.get_base_url()
+    ws_pid = ExecutionChain.Client.get_ws_pid()
 
     proposals
     |> Task.async_stream(
       fn %{execution_block_hash: hash} = proposal ->
         ExecutionChain.Client.put_base_url(execution_url)
+        ExecutionChain.Client.put_ws_pid(ws_pid)
 
         case ExecutionChain.Block.get_block_rewards_by_hash(hash) do
           {:ok, %{total_priority_fees: fees}} ->
