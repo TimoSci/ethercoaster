@@ -5,6 +5,8 @@ defmodule Ethercoaster.Validator.Cache do
   via the cached_epochs table.
   """
 
+  require Logger
+
   import Ecto.Query
 
   alias Ethercoaster.Repo
@@ -211,7 +213,9 @@ defmodule Ethercoaster.Validator.Cache do
     if rows != [], do: Repo.insert_all(Transaction, rows, on_conflict: :nothing)
     mark_cached(validator_id, epochs, "attestation", now)
   catch
-    :skip -> :ok
+    :skip ->
+      Logger.warning("store_and_mark(:attestation) skipped — missing transaction types in DB. Run: mix run priv/repo/seeds.exs")
+      :ok
   end
 
   def store_and_mark(:sync_committee, validator_id, data, epochs, genesis_time) do
@@ -237,7 +241,9 @@ defmodule Ethercoaster.Validator.Cache do
     if rows != [], do: Repo.insert_all(Transaction, rows, on_conflict: :nothing)
     mark_cached(validator_id, epochs, "sync_committee", now)
   catch
-    :skip -> :ok
+    :skip ->
+      Logger.warning("store_and_mark(:sync_committee) skipped — missing transaction type in DB. Run: mix run priv/repo/seeds.exs")
+      :ok
   end
 
   def store_and_mark(:block_proposal, validator_id, data, epochs, genesis_time) do
@@ -264,7 +270,9 @@ defmodule Ethercoaster.Validator.Cache do
     if rows != [], do: Repo.insert_all(Transaction, rows, on_conflict: :nothing)
     mark_cached(validator_id, epochs, "block_proposal", now)
   catch
-    :skip -> :ok
+    :skip ->
+      Logger.warning("store_and_mark(:block_proposal) skipped — missing transaction type in DB. Run: mix run priv/repo/seeds.exs")
+      :ok
   end
 
   def store_and_mark(:block_proposal_execution, validator_id, data, epochs, genesis_time) do
@@ -290,7 +298,9 @@ defmodule Ethercoaster.Validator.Cache do
     if rows != [], do: Repo.insert_all(Transaction, rows, on_conflict: :nothing)
     mark_cached(validator_id, epochs, "block_proposal_execution", now)
   catch
-    :skip -> :ok
+    :skip ->
+      Logger.warning("store_and_mark(:block_proposal_execution) skipped — \"Priority fees (tips)\" transaction type not found in DB. Run: mix run priv/repo/seeds.exs")
+      :ok
   end
 
   # --- Helpers ---

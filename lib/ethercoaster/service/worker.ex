@@ -314,15 +314,33 @@ defmodule Ethercoaster.Service.Worker do
       # Step 4: Fetch execution block rewards for proposals with block hashes
       proposals_with_hash = Enum.filter(proposals, & &1.execution_block_hash)
 
+      if proposals == [] do
+        Logger.info("EL:proposal validator=#{validator.index}: no block proposals in #{length(epochs)} epochs")
+      else
+        Logger.info("EL:proposal validator=#{validator.index}: #{length(proposals)} proposals, #{length(proposals_with_hash)} with block hash")
+      end
+
       execution_data =
         if proposals_with_hash != [] do
-          fetch_execution_rewards(proposals_with_hash)
+          results = fetch_execution_rewards(proposals_with_hash)
+
+          if results == [] do
+            Logger.warning("EL:proposal validator=#{validator.index}: all #{length(proposals_with_hash)} execution reward fetches failed")
+          end
+
+          results
         else
           []
         end
 
       # Step 5: Store execution rewards and mark all epochs as cached
-      Cache.store_and_mark(:block_proposal_execution, validator.id, execution_data, epochs, genesis_time)
+      # Only mark cached if we either stored data or there were no proposals to fetch
+      if execution_data != [] or proposals_with_hash == [] do
+        Cache.store_and_mark(:block_proposal_execution, validator.id, execution_data, epochs, genesis_time)
+      else
+        Logger.warning("EL:proposal validator=#{validator.index}: skipping cache mark — execution fetches failed")
+      end
+
       :ok
     rescue
       e ->
