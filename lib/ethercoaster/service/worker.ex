@@ -6,6 +6,7 @@ defmodule Ethercoaster.Service.Worker do
   alias Ethercoaster.{Services, Validators}
   alias Ethercoaster.Validator.Cache
   alias Ethercoaster.BeaconChain.{Beacon, Client, Node, Rewards}
+  alias Ethercoaster.ExecutionChain
 
   @slots_per_epoch 32
   @max_log_entries 50
@@ -158,6 +159,7 @@ defmodule Ethercoaster.Service.Worker do
     groups = Enum.group_by(batch, fn {validator, _epoch, category} -> {validator.id, category} end)
 
     consensus_endpoint = state.consensus_endpoint
+    execution_endpoint = state.execution_endpoint
 
     tasks =
       Enum.map(groups, fn {{_vid, category}, items} ->
@@ -166,6 +168,7 @@ defmodule Ethercoaster.Service.Worker do
 
         Task.async(fn ->
           Client.put_base_url(consensus_endpoint)
+          ExecutionChain.Client.put_base_url(execution_endpoint)
           fetch_and_store(validator, epochs, category, state.genesis_time)
         end)
       end)
@@ -232,10 +235,11 @@ defmodule Ethercoaster.Service.Worker do
   defp build_work_queue(validators, from_epoch, to_epoch, categories) do
     all_epochs = Enum.to_list(from_epoch..to_epoch)
 
-    # Sort categories so :block_proposal comes first
+    # Sort categories so :block_proposal comes first, then :block_proposal_execution
     sorted_categories = Enum.sort_by(categories, fn
       :block_proposal -> 0
-      _ -> 1
+      :block_proposal_execution -> 1
+      _ -> 2
     end)
 
     for validator <- validators,
@@ -276,6 +280,56 @@ defmodule Ethercoaster.Service.Worker do
     end
   end
 
+  defp fetch_and_store(validator, epochs, :block_proposal_execution, genesis_time) do
+    try do
+      # Step 1: Get consensus proposal data from DB
+      proposals = Cache.get_proposals_with_block_hash(validator.id, epochs)
+
+      # Step 2: Find epochs missing consensus data and fetch them
+      epochs_with_proposals = MapSet.new(proposals, & &1.epoch)
+      missing_epochs = Enum.reject(epochs, &MapSet.member?(epochs_with_proposals, &1))
+
+      proposals =
+        if missing_epochs != [] do
+          {:ok, new_data} = Rewards.fetch_proposal_rewards(missing_epochs, validator.index)
+          Cache.store_and_mark(:block_proposal, validator.id, new_data, missing_epochs, genesis_time)
+          Cache.get_proposals_with_block_hash(validator.id, epochs)
+        else
+          proposals
+        end
+
+      # Step 3: Backfill execution block hashes for proposals that don't have them
+      proposals_missing_hash = Enum.filter(proposals, fn p -> p.slot && !p.execution_block_hash end)
+
+      proposals =
+        if proposals_missing_hash != [] do
+          updated = Rewards.fetch_execution_block_hashes(proposals_missing_hash)
+          Cache.update_execution_block_hashes(validator.id, updated)
+          Cache.get_proposals_with_block_hash(validator.id, epochs)
+        else
+          proposals
+        end
+
+      # Step 4: Fetch execution block rewards for proposals with block hashes
+      proposals_with_hash = Enum.filter(proposals, & &1.execution_block_hash)
+
+      execution_data =
+        if proposals_with_hash != [] do
+          fetch_execution_rewards(proposals_with_hash)
+        else
+          []
+        end
+
+      # Step 5: Store execution rewards and mark all epochs as cached
+      Cache.store_and_mark(:block_proposal_execution, validator.id, execution_data, epochs, genesis_time)
+      :ok
+    rescue
+      e ->
+        Logger.error("Service worker block proposal execution fetch failed: #{inspect(e)}")
+        :error
+    end
+  end
+
   defp fetch_and_store(_validator, _epochs, _category, _genesis_time) do
     # Future categories — no-op for now
     :ok
@@ -310,6 +364,31 @@ defmodule Ethercoaster.Service.Worker do
         end
       end,
       max_concurrency: max_concurrency,
+      timeout: 30_000
+    )
+    |> Enum.flat_map(fn
+      {:ok, {:ok, data}} -> [data]
+      _ -> []
+    end)
+  end
+
+  defp fetch_execution_rewards(proposals) do
+    execution_url = ExecutionChain.Client.get_base_url()
+
+    proposals
+    |> Task.async_stream(
+      fn %{execution_block_hash: hash} = proposal ->
+        ExecutionChain.Client.put_base_url(execution_url)
+
+        case ExecutionChain.Block.get_block_rewards_by_hash(hash) do
+          {:ok, %{total_priority_fees: fees}} ->
+            {:ok, %{epoch: proposal.epoch, slot: proposal.slot, total_priority_fees: fees}}
+
+          {:error, _} ->
+            :error
+        end
+      end,
+      max_concurrency: 4,
       timeout: 30_000
     )
     |> Enum.flat_map(fn

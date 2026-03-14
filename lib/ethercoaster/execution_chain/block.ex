@@ -28,21 +28,21 @@ defmodule Ethercoaster.ExecutionChain.Block do
 
     with {:ok, block_data} when not is_nil(block_data) <- Eth.get_block_by_number(block_hex, true),
          {:ok, receipts} when is_list(receipts) <- Eth.get_block_receipts(block_hex) do
-      base_fee = hex_to_int(block_data["baseFeePerGas"] || "0x0")
-      gas_used = hex_to_int(block_data["gasUsed"])
+      {:ok, build_rewards(block_data, receipts)}
+    else
+      {:ok, nil} -> {:error, :block_not_found}
+      {:error, _} = error -> error
+    end
+  end
 
-      total_priority_fees = compute_priority_fees(block_data["transactions"], receipts, base_fee)
-
-      {:ok,
-       %{
-         block_number: hex_to_int(block_data["number"]),
-         validator: block_data["miner"],
-         fee_recipient: block_data["miner"],
-         base_fee_per_gas: base_fee,
-         gas_used: gas_used,
-         total_priority_fees: total_priority_fees,
-         block_reward: total_priority_fees
-       }}
+  @doc """
+  Like `get_block_rewards/1` but looks up the block by its hash instead of number.
+  """
+  @spec get_block_rewards_by_hash(String.t()) :: {:ok, map()} | {:error, term()}
+  def get_block_rewards_by_hash(block_hash) do
+    with {:ok, block_data} when not is_nil(block_data) <- Eth.get_block_by_hash(block_hash, true),
+         {:ok, receipts} when is_list(receipts) <- Eth.get_block_receipts(block_data["number"]) do
+      {:ok, build_rewards(block_data, receipts)}
     else
       {:ok, nil} -> {:error, :block_not_found}
       {:error, _} = error -> error
@@ -68,20 +68,7 @@ defmodule Ethercoaster.ExecutionChain.Block do
     |> Enum.chunk_every(2)
     |> Enum.map(fn
       [{:ok, block_data}, {:ok, receipts}] when not is_nil(block_data) and is_list(receipts) ->
-        base_fee = hex_to_int(block_data["baseFeePerGas"] || "0x0")
-        gas_used = hex_to_int(block_data["gasUsed"])
-        total_priority_fees = compute_priority_fees(block_data["transactions"], receipts, base_fee)
-
-        {:ok,
-         %{
-           block_number: hex_to_int(block_data["number"]),
-           validator: block_data["miner"],
-           fee_recipient: block_data["miner"],
-           base_fee_per_gas: base_fee,
-           gas_used: gas_used,
-           total_priority_fees: total_priority_fees,
-           block_reward: total_priority_fees
-         }}
+        {:ok, build_rewards(block_data, receipts)}
 
       [{:ok, nil}, _] ->
         {:error, :block_not_found}
@@ -92,6 +79,22 @@ defmodule Ethercoaster.ExecutionChain.Block do
       [_, {:error, _} = error] ->
         error
     end)
+  end
+
+  defp build_rewards(block_data, receipts) do
+    base_fee = hex_to_int(block_data["baseFeePerGas"] || "0x0")
+    gas_used = hex_to_int(block_data["gasUsed"])
+    total_priority_fees = compute_priority_fees(block_data["transactions"], receipts, base_fee)
+
+    %{
+      block_number: hex_to_int(block_data["number"]),
+      validator: block_data["miner"],
+      fee_recipient: block_data["miner"],
+      base_fee_per_gas: base_fee,
+      gas_used: gas_used,
+      total_priority_fees: total_priority_fees,
+      block_reward: total_priority_fees
+    }
   end
 
   # Computes total priority fees (tips) paid to the block proposer.

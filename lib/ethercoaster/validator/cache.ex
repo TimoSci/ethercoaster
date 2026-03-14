@@ -128,6 +128,53 @@ defmodule Ethercoaster.Validator.Cache do
     end)
   end
 
+  def load_category(:block_proposal_execution, validator_id, epochs, _validator_index) do
+    epoch_list = MapSet.to_list(epochs)
+
+    Transaction
+    |> join(:inner, [t], tt in TransactionType, on: t.type_id == tt.id)
+    |> where([t, _tt], t.validator_id == ^validator_id)
+    |> where([t, _tt], t.epoch in ^epoch_list)
+    |> where([_t, tt], tt.name == "Priority fees (tips)")
+    |> select([t, _tt], %{epoch: t.epoch, slot: t.slot, amount: t.amount})
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns consensus block proposals for a validator in the given epochs,
+  including execution_block_hash when available.
+  """
+  def get_proposals_with_block_hash(validator_id, epochs) do
+    epoch_list = Enum.to_list(epochs)
+
+    Transaction
+    |> join(:inner, [t], tt in TransactionType, on: t.type_id == tt.id)
+    |> where([t, _], t.validator_id == ^validator_id)
+    |> where([t, _], t.epoch in ^epoch_list)
+    |> where([_, tt], tt.name == "Consensus proposal reward")
+    |> where([t, _], not is_nil(t.slot))
+    |> select([t, _], %{epoch: t.epoch, slot: t.slot, execution_block_hash: t.execution_block_hash})
+    |> Repo.all()
+  end
+
+  @doc """
+  Updates existing consensus proposal transactions with execution block hashes.
+  """
+  def update_execution_block_hashes(validator_id, proposals) do
+    type_ids = get_type_ids(["Consensus proposal reward"])
+    type_id = type_ids["Consensus proposal reward"]
+
+    if type_id do
+      for %{slot: slot, execution_block_hash: hash} <- proposals, hash do
+        Transaction
+        |> where([t], t.validator_id == ^validator_id)
+        |> where([t], t.slot == ^slot)
+        |> where([t], t.type_id == ^type_id)
+        |> Repo.update_all(set: [execution_block_hash: hash])
+      end
+    end
+  end
+
   # --- Store to cache ---
 
   def store_and_mark(:attestation, validator_id, data, epochs, genesis_time) do
@@ -206,6 +253,7 @@ defmodule Ethercoaster.Validator.Cache do
           datetime: epoch_to_datetime(entry.epoch, genesis_time),
           epoch: entry.epoch,
           slot: entry.slot,
+          execution_block_hash: Map.get(entry, :execution_block_hash),
           type_id: type_ids["Consensus proposal reward"],
           validator_id: validator_id,
           inserted_at: now,
@@ -215,6 +263,32 @@ defmodule Ethercoaster.Validator.Cache do
 
     if rows != [], do: Repo.insert_all(Transaction, rows, on_conflict: :nothing)
     mark_cached(validator_id, epochs, "block_proposal", now)
+  catch
+    :skip -> :ok
+  end
+
+  def store_and_mark(:block_proposal_execution, validator_id, data, epochs, genesis_time) do
+    type_ids = get_type_ids(["Priority fees (tips)"])
+    if map_size(type_ids) < 1, do: throw(:skip)
+
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    rows =
+      Enum.map(data, fn entry ->
+        %{
+          amount: Decimal.new(entry.total_priority_fees),
+          datetime: epoch_to_datetime(entry.epoch, genesis_time),
+          epoch: entry.epoch,
+          slot: entry.slot,
+          type_id: type_ids["Priority fees (tips)"],
+          validator_id: validator_id,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    if rows != [], do: Repo.insert_all(Transaction, rows, on_conflict: :nothing)
+    mark_cached(validator_id, epochs, "block_proposal_execution", now)
   catch
     :skip -> :ok
   end
@@ -248,6 +322,9 @@ defmodule Ethercoaster.Validator.Cache do
 
   defp type_names_for("block_proposal"),
     do: ["Consensus proposal reward"]
+
+  defp type_names_for("block_proposal_execution"),
+    do: ["Priority fees (tips)"]
 
   defp get_type_ids(names) do
     TransactionType

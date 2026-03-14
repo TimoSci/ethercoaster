@@ -59,7 +59,12 @@ defmodule Ethercoaster.BeaconChain.Rewards do
 
             case Beacon.get_block_rewards(slot) do
               {:ok, %{"proposer_index" => _, "total" => total}} ->
-                {:ok, %{epoch: epoch, slot: slot, total: parse_int(total)}}
+                {:ok, %{
+                  epoch: epoch,
+                  slot: slot,
+                  total: parse_int(total),
+                  execution_block_hash: fetch_execution_block_hash(slot)
+                }}
 
               {:error, %{status: 404}} ->
                 # Slot was missed (no block produced)
@@ -78,6 +83,40 @@ defmodule Ethercoaster.BeaconChain.Rewards do
         end)
 
       {:ok, rewards}
+    end
+  end
+
+  @doc """
+  Fetches execution block hashes for a list of consensus proposals.
+  Each proposal must have a `:slot` key. Returns the proposals with
+  `:execution_block_hash` populated.
+  """
+  def fetch_execution_block_hashes(proposals) do
+    max_concurrency = get_max_concurrency()
+    base_url = Client.get_base_url()
+
+    proposals
+    |> Task.async_stream(
+      fn %{slot: slot} = proposal ->
+        Client.put_base_url(base_url)
+        Map.put(proposal, :execution_block_hash, fetch_execution_block_hash(slot))
+      end,
+      max_concurrency: max_concurrency,
+      timeout: 30_000
+    )
+    |> Enum.flat_map(fn
+      {:ok, result} -> [result]
+      _ -> []
+    end)
+  end
+
+  defp fetch_execution_block_hash(slot) do
+    case Beacon.get_block(slot) do
+      {:ok, block_data} ->
+        get_in(block_data, ["message", "body", "execution_payload", "block_hash"])
+
+      _ ->
+        nil
     end
   end
 

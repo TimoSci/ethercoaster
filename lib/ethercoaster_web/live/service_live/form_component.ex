@@ -121,6 +121,15 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
   def handle_event("validate_upload", params, socket) do
     categories = Map.get(params, "categories", [])
+
+    # Auto-include consensus block proposal when execution is selected
+    categories =
+      if "block_proposal_execution" in categories and "block_proposal" not in categories do
+        ["block_proposal" | categories]
+      else
+        categories
+      end
+
     {:noreply, assign(socket, :categories, categories)}
   end
 
@@ -500,9 +509,15 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
               />
               <span>Block Proposal Consensus</span>
             </label>
-            <label class="label cursor-pointer gap-2 opacity-50">
-              <input type="checkbox" disabled class="checkbox" />
-              <span>Block Proposal Execution <span class="badge badge-sm">coming soon</span></span>
+            <label class="label cursor-pointer gap-2">
+              <input
+                type="checkbox"
+                name="categories[]"
+                value="block_proposal_execution"
+                checked={Enum.member?(@categories, "block_proposal_execution")}
+                class="checkbox checkbox-primary"
+              />
+              <span>Block Proposal Execution</span>
             </label>
             <label class="label cursor-pointer gap-2 opacity-50">
               <input type="checkbox" disabled class="checkbox" />
