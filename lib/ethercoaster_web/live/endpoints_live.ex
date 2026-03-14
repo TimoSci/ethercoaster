@@ -95,33 +95,47 @@ defmodule EthercoasterWeb.EndpointsLive do
         <table class="table table-zebra w-full">
           <thead>
             <tr>
-              <th>Address</th>
-              <th>Port</th>
-              <th>Chain</th>
               <th>URL</th>
+              <th>Chain</th>
+              <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody :if={@endpoints == []}>
             <tr>
-              <td colspan="5" class="text-center opacity-50">No endpoints saved yet.</td>
+              <td colspan="4" class="text-center opacity-50">No endpoints saved yet.</td>
             </tr>
           </tbody>
           <tbody :for={ep <- @endpoints}>
               <tr>
-                <td>{ep.address}</td>
-                <td>{ep.port}</td>
+                <td class="font-mono text-sm max-w-md truncate" title={EndpointRecord.url(ep)}>
+                  {EndpointRecord.url(ep)}
+                </td>
                 <td><span class="badge badge-sm badge-outline">{ep.chaintype}</span></td>
-                <td class={"font-mono text-sm #{test_result_class(@test_results, ep.id)}"}>{EndpointRecord.url(ep)}</td>
+                <td>
+                  <span :if={not Map.has_key?(@test_results, ep.id) and ep.id not in @testing_ids} class="text-sm opacity-40">
+                    —
+                  </span>
+                  <span :if={ep.id in @testing_ids} class="loading loading-spinner loading-xs"></span>
+                  <span :if={@test_results[ep.id] == :ok} class="text-success text-sm font-medium">
+                    works
+                  </span>
+                  <span :if={@test_results[ep.id] == :error_response} class="text-warning text-sm font-medium">
+                    responds with error
+                  </span>
+                  <span :if={@test_results[ep.id] == :unreachable} class="text-error text-sm font-medium">
+                    no response
+                  </span>
+                </td>
                 <td class="flex gap-1">
                   <button
                     phx-click="test_endpoint"
                     phx-value-id={ep.id}
-                    class={"btn btn-ghost btn-sm #{if ep.id in @testing_ids, do: "loading loading-spinner"}"}
+                    class="btn btn-ghost btn-sm"
                     disabled={ep.id in @testing_ids}
                     title="Test endpoint"
                   >
-                    <.icon :if={ep.id not in @testing_ids} name="hero-signal" class="size-4" />
+                    <.icon name="hero-signal" class="size-4" />
                   </button>
                   <button phx-click="edit" phx-value-id={ep.id} class="btn btn-ghost btn-sm">
                     <.icon name="hero-pencil-square" class="size-4" />
@@ -137,7 +151,7 @@ defmodule EthercoasterWeb.EndpointsLive do
                 </td>
               </tr>
               <tr :if={Map.has_key?(@test_logs, ep.id)}>
-                <td colspan="5" class="p-0">
+                <td colspan="4" class="p-0">
                   <div class="bg-base-300 p-3 text-sm">
                     <div class="flex items-center justify-between mb-1">
                       <span class="font-semibold text-xs opacity-70">Test Response</span>
@@ -229,29 +243,11 @@ defmodule EthercoasterWeb.EndpointsLive do
   def handle_event("test_endpoint", %{"id" => id}, socket) do
     id = String.to_integer(id)
     endpoint = Endpoints.get_endpoint!(id)
-    url = EndpointRecord.url(endpoint)
     socket = update(socket, :testing_ids, &MapSet.put(&1, id))
     pid = self()
 
     Task.start(fn ->
-      {status_kind, log} =
-        try do
-          case Req.get(url <> "/eth/v1/node/health", receive_timeout: 5000, connect_options: [timeout: 5000], retry: false) do
-            {:ok, %{status: status, headers: headers, body: body}} ->
-              kind = if status in 200..299, do: :ok, else: :denied
-              log = format_response(status, headers, body)
-              {kind, log}
-
-            {:error, %Req.TransportError{reason: reason}} ->
-              {:unreachable, "Connection failed: #{inspect(reason)}"}
-
-            {:error, error} ->
-              {:unreachable, "Request failed: #{inspect(error)}"}
-          end
-        rescue
-          e -> {:unreachable, "Error: #{Exception.message(e)}"}
-        end
-
+      {status_kind, log} = Endpoints.test_endpoint(endpoint)
       send(pid, {:endpoint_tested, id, status_kind, log})
     end)
 
@@ -278,31 +274,6 @@ defmodule EthercoasterWeb.EndpointsLive do
       |> update(:test_logs, &Map.put(&1, id, log))
 
     {:noreply, socket}
-  end
-
-  defp format_response(status, headers, body) do
-    header_lines =
-      headers
-      |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)
-      |> Enum.join("\n")
-
-    body_str =
-      case body do
-        b when is_binary(b) -> b
-        b when is_map(b) or is_list(b) -> Jason.encode!(b, pretty: true)
-        b -> inspect(b)
-      end
-
-    "HTTP #{status}\n#{header_lines}\n\n#{body_str}"
-  end
-
-  defp test_result_class(test_results, id) do
-    case Map.get(test_results, id) do
-      :ok -> "text-success"
-      :denied -> "text-warning"
-      :unreachable -> "text-error"
-      nil -> ""
-    end
   end
 
   defp parse_port(""), do: nil
