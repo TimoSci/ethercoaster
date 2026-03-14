@@ -108,7 +108,7 @@ defmodule EthercoasterWeb.EndpointsLive do
           </tbody>
           <tbody :for={ep <- @endpoints}>
               <tr>
-                <td class="font-mono text-sm max-w-md truncate" title={EndpointRecord.url(ep)}>
+                <td class={"font-mono text-sm max-w-md truncate #{result_color(@test_results, ep.id)}"} title={EndpointRecord.url(ep)}>
                   {EndpointRecord.url(ep)}
                 </td>
                 <td><span class="badge badge-sm badge-outline">{ep.chaintype}</span></td>
@@ -117,15 +117,15 @@ defmodule EthercoasterWeb.EndpointsLive do
                     —
                   </span>
                   <span :if={ep.id in @testing_ids} class="loading loading-spinner loading-xs"></span>
-                  <span :if={@test_results[ep.id] == :ok} class="text-success text-sm font-medium">
-                    works
-                  </span>
-                  <span :if={@test_results[ep.id] == :error_response} class="text-warning text-sm font-medium">
-                    responds with error
-                  </span>
-                  <span :if={@test_results[ep.id] == :unreachable} class="text-error text-sm font-medium">
-                    no response
-                  </span>
+                  <div :if={Map.has_key?(@test_results, ep.id) and ep.id not in @testing_ids}>
+                    <span class={"text-sm font-medium #{result_color(@test_results, ep.id)}"}>
+                      {result_label(@test_results, ep.id)}
+                    </span>
+                    <br />
+                    <span class="opacity-50" style="font-size: 50%">
+                      {result_time(@test_results, ep.id)}
+                    </span>
+                  </div>
                 </td>
                 <td class="flex gap-1">
                   <button
@@ -257,10 +257,7 @@ defmodule EthercoasterWeb.EndpointsLive do
   def handle_event("clear_test_log", %{"id" => id}, socket) do
     id = String.to_integer(id)
 
-    socket =
-      socket
-      |> update(:test_logs, &Map.delete(&1, id))
-      |> update(:test_results, &Map.delete(&1, id))
+    socket = update(socket, :test_logs, &Map.delete(&1, id))
 
     {:noreply, socket}
   end
@@ -270,10 +267,35 @@ defmodule EthercoasterWeb.EndpointsLive do
     socket =
       socket
       |> update(:testing_ids, &MapSet.delete(&1, id))
-      |> update(:test_results, &Map.put(&1, id, status_kind))
+      |> update(:test_results, &Map.put(&1, id, {status_kind, DateTime.utc_now()}))
       |> update(:test_logs, &Map.put(&1, id, log))
 
     {:noreply, socket}
+  end
+
+  defp result_color(test_results, id) do
+    case test_results[id] do
+      {:ok, _} -> "text-success"
+      {:error_response, _} -> "text-warning"
+      {:unreachable, _} -> "text-error"
+      _ -> ""
+    end
+  end
+
+  defp result_label(test_results, id) do
+    case test_results[id] do
+      {:ok, _} -> "works"
+      {:error_response, _} -> "responds with error"
+      {:unreachable, _} -> "no response"
+      _ -> ""
+    end
+  end
+
+  defp result_time(test_results, id) do
+    case test_results[id] do
+      {_, %DateTime{} = dt} -> Calendar.strftime(dt, "%Y-%m-%d %H:%M:%S UTC")
+      _ -> ""
+    end
   end
 
   defp parse_port(""), do: nil
