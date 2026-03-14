@@ -21,7 +21,13 @@ defmodule Ethercoaster.EndpointRecord do
 
   def url(%__MODULE__{address: address, port: port}) do
     uri = URI.parse(address)
-    default_port = if uri.scheme == "https", do: 443, else: 80
+
+    default_port =
+      case uri.scheme do
+        "https" -> 443
+        "wss" -> 443
+        _ -> 80
+      end
 
     if port == default_port do
       address
@@ -35,8 +41,14 @@ defmodule Ethercoaster.EndpointRecord do
 
     case URI.parse(url) do
       %URI{scheme: scheme, host: host, port: port, path: path}
-      when scheme in ["http", "https"] and is_binary(host) and host != "" ->
-        default_port = if scheme == "https", do: 443, else: 80
+      when scheme in ["http", "https", "ws", "wss"] and is_binary(host) and host != "" ->
+        default_port =
+          case scheme do
+            "https" -> 443
+            "wss" -> 443
+            _ -> 80
+          end
+
         clean_path = if path in [nil, "/"], do: "", else: String.trim_trailing(path, "/")
         {:ok, %{address: "#{scheme}://#{host}#{clean_path}", port: port || default_port}}
 

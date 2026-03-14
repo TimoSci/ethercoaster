@@ -51,8 +51,9 @@ defmodule Ethercoaster.Endpoints do
   @doc """
   Tests connectivity to an endpoint by sending a health/status request.
 
-  Uses `/eth/v1/node/health` for consensus endpoints and `eth_chainId`
-  JSON-RPC for execution endpoints.
+  Consensus endpoints are tested via `GET /eth/v1/node/health`.
+  Execution endpoints are tested via HTTP JSON-RPC (`eth_chainId`) for
+  `http://` URLs or via WebSocket for `ws://` URLs.
 
   Returns `{status, log}` where status is `:ok`, `:error_response`, or `:unreachable`,
   and log is a string with the response details.
@@ -89,6 +90,9 @@ defmodule Ethercoaster.Endpoints do
     end
   end
 
+  defp test_execution("ws://" <> _ = url), do: test_execution_ws(url)
+  defp test_execution("wss://" <> _ = url), do: test_execution_ws(url)
+
   defp test_execution(url) do
     body = %{"jsonrpc" => "2.0", "id" => 1, "method" => "eth_chainId", "params" => []}
 
@@ -114,6 +118,127 @@ defmodule Ethercoaster.Endpoints do
 
       {:error, error} ->
         {:unreachable, "Request failed: #{inspect(error)}"}
+    end
+  end
+
+  defp test_execution_ws(url) do
+    uri = URI.parse(url)
+    ws_scheme = if uri.scheme == "wss", do: :wss, else: :ws
+    http_scheme = if ws_scheme == :wss, do: :https, else: :http
+    port = uri.port || if(ws_scheme == :wss, do: 443, else: 80)
+    path = uri.path || "/"
+
+    with {:ok, conn} <- Mint.HTTP.connect(http_scheme, uri.host, port, protocols: [:http1]),
+         {:ok, conn, ref} <- Mint.WebSocket.upgrade(ws_scheme, conn, path, []),
+         {:ok, conn, websocket} <- await_upgrade(conn, ref),
+         {:ok, conn, websocket} <- ws_send(conn, ref, websocket, "eth_chainId"),
+         {:ok, _conn, response} <- ws_receive(conn, ref, websocket) do
+      case response do
+        %{"result" => result} ->
+          {:ok, "WebSocket connected\n\neth_chainId: #{result}"}
+
+        %{"error" => %{"message" => msg}} ->
+          {:error_response, "WebSocket connected\n\nRPC error: #{msg}"}
+
+        other ->
+          {:error_response, "WebSocket connected\n\nUnexpected: #{inspect(other)}"}
+      end
+    else
+      {:error, reason} ->
+        {:unreachable, "Connection failed: #{inspect(reason)}"}
+
+      {:error, _conn, reason} ->
+        {:unreachable, "Connection failed: #{inspect(reason)}"}
+    end
+  end
+
+  defp await_upgrade(conn, ref) do
+    receive do
+      message ->
+        case Mint.WebSocket.stream(conn, message) do
+          {:ok, conn, responses} ->
+            {status, headers} =
+              Enum.reduce(responses, {nil, []}, fn
+                {:status, ^ref, s}, {_, h} -> {s, h}
+                {:headers, ^ref, h}, {s, acc} -> {s, acc ++ h}
+                {:done, ^ref}, acc -> acc
+                _, acc -> acc
+              end)
+
+            if status do
+              Mint.WebSocket.new(conn, ref, status, headers)
+            else
+              {:error, conn, :upgrade_incomplete}
+            end
+
+          {:error, conn, reason, _} ->
+            {:error, conn, reason}
+
+          :unknown ->
+            {:error, conn, :unknown_message}
+        end
+    after
+      5000 -> {:error, conn, :timeout}
+    end
+  end
+
+  defp ws_send(conn, ref, websocket, method) do
+    payload = Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "method" => method, "params" => []})
+
+    case Mint.WebSocket.encode(websocket, {:text, payload}) do
+      {:ok, websocket, data} ->
+        case Mint.WebSocket.stream_request_body(conn, ref, data) do
+          {:ok, conn} -> {:ok, conn, websocket}
+          {:error, conn, reason} -> {:error, conn, reason}
+        end
+
+      {:error, _websocket, reason} ->
+        {:error, conn, reason}
+    end
+  end
+
+  defp ws_receive(conn, ref, websocket) do
+    receive do
+      message ->
+        case Mint.WebSocket.stream(conn, message) do
+          {:ok, conn, responses} ->
+            data =
+              Enum.find_value(responses, fn
+                {:data, ^ref, d} -> d
+                _ -> nil
+              end)
+
+            if data do
+              case Mint.WebSocket.decode(websocket, data) do
+                {:ok, _websocket, frames} ->
+                  text =
+                    Enum.find_value(frames, fn
+                      {:text, t} -> t
+                      _ -> nil
+                    end)
+
+                  if text do
+                    {:ok, conn, Jason.decode!(text)}
+                  else
+                    {:ok, conn, %{"error" => %{"message" => "no text frame"}}}
+                  end
+
+                {:error, _websocket, reason} ->
+                  {:error, conn, reason}
+              end
+            else
+              # No data yet, try again
+              ws_receive(conn, ref, websocket)
+            end
+
+          {:error, conn, reason, _} ->
+            {:error, conn, reason}
+
+          :unknown ->
+            ws_receive(conn, ref, websocket)
+        end
+    after
+      5000 -> {:error, conn, :timeout}
     end
   end
 
