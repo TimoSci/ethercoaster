@@ -1,9 +1,7 @@
 defmodule EthercoasterWeb.CockpitLive do
   use EthercoasterWeb, :live_view
 
-  alias Ethercoaster.Services
-  alias Ethercoaster.Endpoints
-  alias Ethercoaster.Validators
+  alias Ethercoaster.{Services, Endpoints, Validators, Transactions}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -21,6 +19,7 @@ defmodule EthercoasterWeb.CockpitLive do
       |> assign(:validator_states, validator_state_breakdown(validators))
       |> assign(:group_count, length(groups))
       |> assign(:supergroup_count, length(Validators.list_supergroups()))
+      |> assign(:transaction_count, Transactions.count_transactions())
 
     {:ok, socket}
   end
@@ -92,6 +91,14 @@ defmodule EthercoasterWeb.CockpitLive do
           <h2 class="card-title">Validator Groups</h2>
           <p class="text-3xl font-bold">{@group_count}</p>
           <p class="text-sm opacity-70">{@supergroup_count} supergroups</p>
+        </div>
+      </a>
+
+      <a href="/transactions" class="card bg-base-200 hover:bg-base-300 transition cursor-pointer">
+        <div class="card-body">
+          <h2 class="card-title">Transactions</h2>
+          <p class="text-3xl font-bold">{@transaction_count}</p>
+          <p class="text-sm opacity-70">Stored reward transactions</p>
         </div>
       </a>
 

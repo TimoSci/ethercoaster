@@ -27,6 +27,7 @@ defmodule EthercoasterWeb.Router do
       live "/services", ServiceLive
       live "/services/progress_map", ProgressMapLive
       live "/services/:id/edit", ServiceEditLive
+      live "/transactions", TransactionsLive
       live "/transaction_types", TransactionTypesLive
       live "/endpoints", EndpointsLive
       live "/validators", ValidatorsLive
