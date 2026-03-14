@@ -189,7 +189,8 @@ defmodule Ethercoaster.Service.Worker do
     succeeded = Enum.count(results, &(&1 == :ok))
     failed = length(results) - succeeded
 
-    log_msg = "Batch: #{completed_count} items (#{succeeded} ok, #{failed} failed) — #{state.epochs_completed}/#{state.epochs_total} [#{format_ms(batch_ms)}]"
+    chain_label = batch |> Enum.map(&elem(&1, 2)) |> Enum.uniq() |> Enum.map_join(", ", &category_label/1)
+    log_msg = "Batch [#{chain_label}]: #{completed_count} items (#{succeeded} ok, #{failed} failed) — #{state.epochs_completed}/#{state.epochs_total} [#{format_ms(batch_ms)}]"
     state = add_log(state, log_msg)
     broadcast_state(state, :progress)
 
@@ -423,6 +424,12 @@ defmodule Ethercoaster.Service.Worker do
 
   defp avg_batch_ms([]), do: nil
   defp avg_batch_ms(times), do: round(Enum.sum(times) / length(times))
+
+  defp category_label(:attestation), do: "CL:attestation"
+  defp category_label(:block_proposal), do: "CL:proposal"
+  defp category_label(:block_proposal_execution), do: "EL:proposal"
+  defp category_label(:sync_committee), do: "CL:sync"
+  defp category_label(other), do: Atom.to_string(other)
 
   defp format_ms(ms) when ms < 1000, do: "#{ms}ms"
   defp format_ms(ms), do: "#{Float.round(ms / 1000, 1)}s"
