@@ -30,6 +30,10 @@ config :swoosh, :api_client, false
 config :ethercoaster, Ethercoaster.BeaconChain,
   req_options: [plug: {Req.Test, Ethercoaster.BeaconChain.Client}, retry: false]
 
+# Route Execution Chain HTTP calls through Req.Test for stubbing
+config :ethercoaster, Ethercoaster.ExecutionChain,
+  req_options: [plug: {Req.Test, Ethercoaster.ExecutionChain.Client}, retry: false]
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

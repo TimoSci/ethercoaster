@@ -42,6 +42,11 @@ config :ethercoaster, Ethercoaster.BeaconChain,
   pool_count: String.to_integer(System.get_env("BEACON_POOL_COUNT", "1")),
   max_concurrency: String.to_integer(System.get_env("BEACON_MAX_CONCURRENCY", "16"))
 
+config :ethercoaster, Ethercoaster.ExecutionChain,
+  base_url: System.get_env("EXECUTION_API_URL", "http://localhost:8545"),
+  ws_url: System.get_env("EXECUTION_WS_URL", "ws://localhost:8546"),
+  receive_timeout: String.to_integer(System.get_env("EXECUTION_API_TIMEOUT", "15000"))
+
 if System.get_env("PHX_SERVER") do
   config :ethercoaster, EthercoasterWeb.Endpoint, server: true
 end

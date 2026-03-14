@@ -477,6 +477,14 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
               />
               <span>Block Proposal</span>
             </label>
+            <label class="label cursor-pointer gap-2 opacity-50">
+              <input type="checkbox" disabled class="checkbox" />
+              <span>Slashing <span class="badge badge-sm">coming soon</span></span>
+            </label>
+            <label class="label cursor-pointer gap-2 opacity-50">
+              <input type="checkbox" disabled class="checkbox" />
+              <span>Lifecycle <span class="badge badge-sm">coming soon</span></span>
+            </label>
           </div>
         </div>
 
