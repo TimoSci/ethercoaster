@@ -35,11 +35,11 @@ defmodule Ethercoaster.Endpoints do
   @doc """
   Ensures an endpoint exists for the given URL. Returns :ok or :error.
   """
-  def ensure_from_url(url) when is_binary(url) do
+  def ensure_from_url(url, chaintype \\ :consensus) when is_binary(url) do
     case EndpointRecord.parse_url(url) do
       {:ok, attrs} ->
         case Repo.get_by(EndpointRecord, address: attrs.address, port: attrs.port) do
-          nil -> create_endpoint(attrs)
+          nil -> create_endpoint(Map.put(attrs, :chaintype, chaintype))
           existing -> {:ok, existing}
         end
 

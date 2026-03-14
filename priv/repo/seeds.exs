@@ -124,17 +124,19 @@ endpoints_path = Path.join(:code.priv_dir(:ethercoaster), "repo/endpoints.exs")
 if File.exists?(endpoints_path) do
   {endpoints, _} = Code.eval_file(endpoints_path)
 
-  for %{url: url} <- endpoints do
-    case Ethercoaster.EndpointRecord.parse_url(url) do
+  for ep <- endpoints do
+    case Ethercoaster.EndpointRecord.parse_url(ep.url) do
       {:ok, attrs} ->
+        chaintype = Map.get(ep, :chaintype, :consensus)
+
         Repo.insert!(
-          %Ethercoaster.EndpointRecord{address: attrs.address, port: attrs.port},
+          %Ethercoaster.EndpointRecord{address: attrs.address, port: attrs.port, chaintype: chaintype},
           on_conflict: :nothing,
           conflict_target: [:address, :port]
         )
 
       {:error, reason} ->
-        IO.puts("Skipping invalid endpoint #{url}: #{reason}")
+        IO.puts("Skipping invalid endpoint #{ep.url}: #{reason}")
     end
   end
 

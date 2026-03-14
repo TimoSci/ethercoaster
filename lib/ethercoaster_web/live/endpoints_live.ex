@@ -17,6 +17,7 @@ defmodule EthercoasterWeb.EndpointsLive do
       |> assign(:editing_id, nil)
       |> assign(:form_address, "")
       |> assign(:form_port, "")
+      |> assign(:form_chaintype, "consensus")
       |> assign(:form_error, nil)
       |> assign(:test_results, %{})
       |> assign(:test_logs, %{})
@@ -72,6 +73,13 @@ defmodule EthercoasterWeb.EndpointsLive do
               placeholder="5052"
             />
           </div>
+          <div class="w-40">
+            <label class="label">Chain</label>
+            <select name="chaintype" class="select select-bordered w-full">
+              <option value="consensus" selected={@form_chaintype == "consensus"}>Consensus</option>
+              <option value="execution" selected={@form_chaintype == "execution"}>Execution</option>
+            </select>
+          </div>
           <button type="submit" class="btn btn-primary">
             <.icon name={if @editing_id, do: "hero-check", else: "hero-plus"} class="size-4" />
             {if @editing_id, do: "Update", else: "Add"}
@@ -89,19 +97,21 @@ defmodule EthercoasterWeb.EndpointsLive do
             <tr>
               <th>Address</th>
               <th>Port</th>
+              <th>Chain</th>
               <th>URL</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody :if={@endpoints == []}>
             <tr>
-              <td colspan="4" class="text-center opacity-50">No endpoints saved yet.</td>
+              <td colspan="5" class="text-center opacity-50">No endpoints saved yet.</td>
             </tr>
           </tbody>
           <tbody :for={ep <- @endpoints}>
               <tr>
                 <td>{ep.address}</td>
                 <td>{ep.port}</td>
+                <td><span class="badge badge-sm badge-outline">{ep.chaintype}</span></td>
                 <td class={"font-mono text-sm #{test_result_class(@test_results, ep.id)}"}>{EndpointRecord.url(ep)}</td>
                 <td class="flex gap-1">
                   <button
@@ -127,7 +137,7 @@ defmodule EthercoasterWeb.EndpointsLive do
                 </td>
               </tr>
               <tr :if={Map.has_key?(@test_logs, ep.id)}>
-                <td colspan="4" class="p-0">
+                <td colspan="5" class="p-0">
                   <div class="bg-base-300 p-3 text-sm">
                     <div class="flex items-center justify-between mb-1">
                       <span class="font-semibold text-xs opacity-70">Test Response</span>
@@ -152,8 +162,8 @@ defmodule EthercoasterWeb.EndpointsLive do
   end
 
   @impl true
-  def handle_event("save", %{"address" => address, "port" => port}, socket) do
-    attrs = %{address: String.trim(address), port: parse_port(port)}
+  def handle_event("save", %{"address" => address, "port" => port, "chaintype" => chaintype}, socket) do
+    attrs = %{address: String.trim(address), port: parse_port(port), chaintype: chaintype}
 
     result =
       if socket.assigns.editing_id do
@@ -171,6 +181,7 @@ defmodule EthercoasterWeb.EndpointsLive do
           |> assign(:editing_id, nil)
           |> assign(:form_address, "")
           |> assign(:form_port, "")
+          |> assign(:form_chaintype, "consensus")
           |> assign(:form_error, nil)
 
         {:noreply, socket}
@@ -191,6 +202,7 @@ defmodule EthercoasterWeb.EndpointsLive do
       |> assign(:editing_id, endpoint.id)
       |> assign(:form_address, endpoint.address)
       |> assign(:form_port, Integer.to_string(endpoint.port))
+      |> assign(:form_chaintype, to_string(endpoint.chaintype))
       |> assign(:form_error, nil)
 
     {:noreply, socket}
@@ -202,6 +214,7 @@ defmodule EthercoasterWeb.EndpointsLive do
       |> assign(:editing_id, nil)
       |> assign(:form_address, "")
       |> assign(:form_port, "")
+      |> assign(:form_chaintype, "consensus")
       |> assign(:form_error, nil)
 
     {:noreply, socket}

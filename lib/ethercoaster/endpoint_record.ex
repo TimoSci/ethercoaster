@@ -5,14 +5,16 @@ defmodule Ethercoaster.EndpointRecord do
   schema "endpoints" do
     field :address, :string
     field :port, :integer
+    field :chaintype, Ecto.Enum, values: [:consensus, :execution]
 
     timestamps(type: :utc_datetime)
   end
 
   def changeset(endpoint, attrs) do
     endpoint
-    |> cast(attrs, [:address, :port])
-    |> validate_required([:address, :port])
+    |> cast(attrs, [:address, :port, :chaintype])
+    |> validate_required([:address, :port, :chaintype])
+    |> validate_inclusion(:chaintype, [:consensus, :execution])
     |> validate_number(:port, greater_than: 0, less_than: 65536)
     |> unique_constraint([:address, :port])
   end
