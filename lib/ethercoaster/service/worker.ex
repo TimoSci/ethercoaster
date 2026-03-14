@@ -40,7 +40,8 @@ defmodule Ethercoaster.Service.Worker do
       log: [],
       paused: false,
       genesis_time: nil,
-      endpoint: nil,
+      consensus_endpoint: nil,
+      execution_endpoint: nil,
       categories: [],
       batch_size: default_batch_size(),
       last_batch_ms: nil,
@@ -54,7 +55,7 @@ defmodule Ethercoaster.Service.Worker do
   @impl true
   def handle_continue(:setup, state) do
     service = Services.get_service!(state.service_id)
-    Client.put_base_url(service.endpoint)
+    Client.put_base_url(service.consensus_endpoint)
 
     case resolve_epoch_range(service) do
       {:ok, from_epoch, to_epoch} ->
@@ -86,7 +87,8 @@ defmodule Ethercoaster.Service.Worker do
           epochs_completed: completed,
           epochs_total: total,
           genesis_time: genesis_time,
-          endpoint: service.endpoint,
+          consensus_endpoint: service.consensus_endpoint,
+          execution_endpoint: service.execution_endpoint,
           categories: categories,
           batch_size: batch_size
         }
@@ -155,7 +157,7 @@ defmodule Ethercoaster.Service.Worker do
     # Group batch items by {validator_id, category}
     groups = Enum.group_by(batch, fn {validator, _epoch, category} -> {validator.id, category} end)
 
-    endpoint = state.endpoint
+    consensus_endpoint = state.consensus_endpoint
 
     tasks =
       Enum.map(groups, fn {{_vid, category}, items} ->
@@ -163,7 +165,7 @@ defmodule Ethercoaster.Service.Worker do
         epochs = Enum.map(items, &elem(&1, 1))
 
         Task.async(fn ->
-          Client.put_base_url(endpoint)
+          Client.put_base_url(consensus_endpoint)
           fetch_and_store(validator, epochs, category, state.genesis_time)
         end)
       end)

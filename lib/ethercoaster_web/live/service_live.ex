@@ -35,8 +35,8 @@ defmodule EthercoasterWeb.ServiceLive do
     end
   end
 
-  defp effective_endpoint(service) do
-    service.endpoint || default_endpoint()
+  defp effective_consensus_endpoint(service) do
+    service.consensus_endpoint || default_endpoint()
   end
 
   @impl true
@@ -90,7 +90,7 @@ defmodule EthercoasterWeb.ServiceLive do
     lv = self()
 
     for service <- services do
-      endpoint = effective_endpoint(service)
+      endpoint = effective_consensus_endpoint(service)
       service_id = service.id
 
       Task.start(fn ->
@@ -185,7 +185,8 @@ defmodule EthercoasterWeb.ServiceLive do
             id={"card-#{service.id}"}
             service={service}
             worker_state={Map.get(@worker_states, service.id)}
-            endpoint_url={service.endpoint || @default_endpoint}
+            consensus_endpoint_url={service.consensus_endpoint || @default_endpoint}
+            execution_endpoint_url={service.execution_endpoint}
             endpoint_status={Map.get(@endpoint_status, service.id, :checking)}
           />
         </div>
@@ -205,9 +206,13 @@ defmodule EthercoasterWeb.ServiceLive do
   # --- Form save ---
 
   def handle_info({:save_service, params}, socket) do
-    # Auto-save manually entered endpoint
-    if params.attrs[:endpoint] && params.attrs.endpoint != "" do
-      Endpoints.ensure_from_url(params.attrs.endpoint)
+    # Auto-save manually entered endpoints
+    if params.attrs[:consensus_endpoint] && params.attrs.consensus_endpoint != "" do
+      Endpoints.ensure_from_url(params.attrs.consensus_endpoint, :consensus)
+    end
+
+    if params.attrs[:execution_endpoint] && params.attrs.execution_endpoint != "" do
+      Endpoints.ensure_from_url(params.attrs.execution_endpoint, :execution)
     end
 
     case Services.create_service(params.attrs, params.validators) do
@@ -229,7 +234,7 @@ defmodule EthercoasterWeb.ServiceLive do
         endpoint_status = Map.put(socket.assigns.endpoint_status, service.id, :checking)
 
         if connected?(socket) do
-          endpoint = effective_endpoint(service)
+          endpoint = effective_consensus_endpoint(service)
           sid = service.id
           lv = self()
           Task.start(fn ->

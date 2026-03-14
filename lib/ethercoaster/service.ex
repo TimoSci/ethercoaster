@@ -9,7 +9,8 @@ defmodule Ethercoaster.Service do
     field :last_n_epochs, :integer
     field :epoch_from, :integer
     field :epoch_to, :integer
-    field :endpoint, :string
+    field :consensus_endpoint, :string
+    field :execution_endpoint, :string
     field :batch_size, :integer
     field :status, :string, default: "stopped"
 
@@ -23,7 +24,7 @@ defmodule Ethercoaster.Service do
 
   def changeset(service, attrs) do
     service
-    |> cast(attrs, [:name, :categories, :query_mode, :last_n_epochs, :epoch_from, :epoch_to, :endpoint, :batch_size, :status])
+    |> cast(attrs, [:name, :categories, :query_mode, :last_n_epochs, :epoch_from, :epoch_to, :consensus_endpoint, :execution_endpoint, :batch_size, :status])
     |> validate_number(:batch_size, greater_than: 0)
     |> validate_required([:query_mode, :categories])
     |> validate_inclusion(:query_mode, ["last_n_epochs", "epoch_range"])

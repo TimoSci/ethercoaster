@@ -77,8 +77,12 @@ defmodule EthercoasterWeb.ServiceEditLive do
 
   @impl true
   def handle_info({:update_service, id, params}, socket) do
-    if params.attrs[:endpoint] && params.attrs.endpoint != "" do
-      Endpoints.ensure_from_url(params.attrs.endpoint)
+    if params.attrs[:consensus_endpoint] && params.attrs.consensus_endpoint != "" do
+      Endpoints.ensure_from_url(params.attrs.consensus_endpoint, :consensus)
+    end
+
+    if params.attrs[:execution_endpoint] && params.attrs.execution_endpoint != "" do
+      Endpoints.ensure_from_url(params.attrs.execution_endpoint, :execution)
     end
 
     service = Services.get_service!(id)

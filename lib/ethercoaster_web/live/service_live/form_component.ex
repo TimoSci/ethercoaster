@@ -15,7 +15,8 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
       |> assign(:epoch_to, "")
       |> assign(:date_from, "")
       |> assign(:date_to, "")
-      |> assign(:endpoint, "")
+      |> assign(:consensus_endpoint, "")
+      |> assign(:execution_endpoint, "")
       |> assign(:batch_size, "")
       |> assign(:categories, ["attestation"])
       |> assign(:upload_error, nil)
@@ -26,8 +27,10 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
       |> assign(:validator_picker_offset, 0)
       |> assign(:show_group_picker, false)
       |> assign(:group_picker_offset, 0)
-      |> assign(:show_endpoint_picker, false)
-      |> assign(:endpoint_picker_offset, 0)
+      |> assign(:show_consensus_endpoint_picker, false)
+      |> assign(:consensus_endpoint_picker_offset, 0)
+      |> assign(:show_execution_endpoint_picker, false)
+      |> assign(:execution_endpoint_picker_offset, 0)
       |> allow_upload(:validator_file, accept: ~w(.csv .json), max_entries: 1)
 
     {:ok, socket}
@@ -66,7 +69,8 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
           |> assign(:last_n_epochs, if(service.last_n_epochs, do: Integer.to_string(service.last_n_epochs), else: ""))
           |> assign(:epoch_from, if(service.epoch_from, do: Integer.to_string(service.epoch_from), else: ""))
           |> assign(:epoch_to, if(service.epoch_to, do: Integer.to_string(service.epoch_to), else: ""))
-          |> assign(:endpoint, service.endpoint || "")
+          |> assign(:consensus_endpoint, service.consensus_endpoint || "")
+          |> assign(:execution_endpoint, service.execution_endpoint || "")
           |> assign(:batch_size, if(service.batch_size, do: Integer.to_string(service.batch_size), else: ""))
           |> assign(:categories, service.categories)
           |> assign(:validators, validators)
@@ -150,8 +154,12 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     {:noreply, assign(socket, :show_group_picker, !socket.assigns.show_group_picker)}
   end
 
-  def handle_event("toggle_picker", %{"picker" => "endpoint"}, socket) do
-    {:noreply, assign(socket, :show_endpoint_picker, !socket.assigns.show_endpoint_picker)}
+  def handle_event("toggle_picker", %{"picker" => "consensus_endpoint"}, socket) do
+    {:noreply, assign(socket, :show_consensus_endpoint_picker, !socket.assigns.show_consensus_endpoint_picker)}
+  end
+
+  def handle_event("toggle_picker", %{"picker" => "execution_endpoint"}, socket) do
+    {:noreply, assign(socket, :show_execution_endpoint_picker, !socket.assigns.show_execution_endpoint_picker)}
   end
 
   def handle_event("picker_prev", %{"picker" => "validator"}, socket) do
@@ -162,8 +170,12 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     {:noreply, assign(socket, :group_picker_offset, max(socket.assigns.group_picker_offset - @picker_size, 0))}
   end
 
-  def handle_event("picker_prev", %{"picker" => "endpoint"}, socket) do
-    {:noreply, assign(socket, :endpoint_picker_offset, max(socket.assigns.endpoint_picker_offset - @picker_size, 0))}
+  def handle_event("picker_prev", %{"picker" => "consensus_endpoint"}, socket) do
+    {:noreply, assign(socket, :consensus_endpoint_picker_offset, max(socket.assigns.consensus_endpoint_picker_offset - @picker_size, 0))}
+  end
+
+  def handle_event("picker_prev", %{"picker" => "execution_endpoint"}, socket) do
+    {:noreply, assign(socket, :execution_endpoint_picker_offset, max(socket.assigns.execution_endpoint_picker_offset - @picker_size, 0))}
   end
 
   def handle_event("picker_next", %{"picker" => "validator"}, socket) do
@@ -174,8 +186,12 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     {:noreply, assign(socket, :group_picker_offset, socket.assigns.group_picker_offset + @picker_size)}
   end
 
-  def handle_event("picker_next", %{"picker" => "endpoint"}, socket) do
-    {:noreply, assign(socket, :endpoint_picker_offset, socket.assigns.endpoint_picker_offset + @picker_size)}
+  def handle_event("picker_next", %{"picker" => "consensus_endpoint"}, socket) do
+    {:noreply, assign(socket, :consensus_endpoint_picker_offset, socket.assigns.consensus_endpoint_picker_offset + @picker_size)}
+  end
+
+  def handle_event("picker_next", %{"picker" => "execution_endpoint"}, socket) do
+    {:noreply, assign(socket, :execution_endpoint_picker_offset, socket.assigns.execution_endpoint_picker_offset + @picker_size)}
   end
 
   def handle_event("pick_validator", %{"item" => value}, socket) do
@@ -208,8 +224,12 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     end
   end
 
-  def handle_event("pick_endpoint", %{"item" => value}, socket) do
-    {:noreply, assign(socket, :endpoint, value)}
+  def handle_event("pick_consensus_endpoint", %{"item" => value}, socket) do
+    {:noreply, assign(socket, :consensus_endpoint, value)}
+  end
+
+  def handle_event("pick_execution_endpoint", %{"item" => value}, socket) do
+    {:noreply, assign(socket, :execution_endpoint, value)}
   end
 
   defp build_service_params(socket) do
@@ -223,7 +243,8 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
         last_n_epochs: parse_int_or_nil(a.last_n_epochs),
         epoch_from: parse_int_or_nil(a.epoch_from),
         epoch_to: parse_int_or_nil(a.epoch_to),
-        endpoint: if(a.endpoint == "", do: nil, else: a.endpoint),
+        consensus_endpoint: if(a.consensus_endpoint == "", do: nil, else: a.consensus_endpoint),
+        execution_endpoint: if(a.execution_endpoint == "", do: nil, else: a.execution_endpoint),
         batch_size: parse_int_or_nil(a.batch_size),
         categories: a.categories
       },
@@ -333,8 +354,10 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
     end)
   end
 
-  defp endpoint_picker_items(saved_endpoints) do
-    Enum.map(saved_endpoints, fn ep ->
+  defp endpoint_picker_items(saved_endpoints, chaintype) do
+    saved_endpoints
+    |> Enum.filter(fn ep -> ep.chaintype == chaintype end)
+    |> Enum.map(fn ep ->
       url = Ethercoaster.EndpointRecord.url(ep)
       {url, url}
     end)
@@ -475,7 +498,11 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
                 checked={Enum.member?(@categories, "block_proposal")}
                 class="checkbox checkbox-primary"
               />
-              <span>Block Proposal</span>
+              <span>Block Proposal Consensus</span>
+            </label>
+            <label class="label cursor-pointer gap-2 opacity-50">
+              <input type="checkbox" disabled class="checkbox" />
+              <span>Block Proposal Execution <span class="badge badge-sm">coming soon</span></span>
             </label>
             <label class="label cursor-pointer gap-2 opacity-50">
               <input type="checkbox" disabled class="checkbox" />
@@ -568,33 +595,64 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
           </div>
         </div>
 
-        <div>
-          <label class="label">Endpoint (optional)</label>
-          <div class="flex gap-2 items-start">
-            <div class="flex-1">
-              <input
-                type="text"
-                value={@endpoint}
-                phx-blur="update_field"
-                phx-value-field="endpoint"
-                phx-target={@myself}
-                class="input input-bordered w-full"
-                placeholder="http://localhost:5052"
-              />
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="label">Consensus Endpoint (optional)</label>
+            <div class="flex gap-2 items-start">
+              <div class="flex-1">
+                <input
+                  type="text"
+                  value={@consensus_endpoint}
+                  phx-blur="update_field"
+                  phx-value-field="consensus_endpoint"
+                  phx-target={@myself}
+                  class="input input-bordered w-full"
+                  placeholder="http://localhost:5052"
+                />
+              </div>
+              <div :if={endpoint_picker_items(@saved_endpoints, :consensus) != []} class="w-64 shrink-0">
+                <.picker
+                  items={endpoint_picker_items(@saved_endpoints, :consensus)}
+                  label="Saved Endpoints"
+                  picker="consensus_endpoint"
+                  pick_event="pick_consensus_endpoint"
+                  show={@show_consensus_endpoint_picker}
+                  offset={@consensus_endpoint_picker_offset}
+                  target={@myself}
+                />
+              </div>
             </div>
-            <div :if={@saved_endpoints != []} class="w-64 shrink-0">
-              <.picker
-                items={endpoint_picker_items(@saved_endpoints)}
-                label="Saved Endpoints"
-                picker="endpoint"
-                pick_event="pick_endpoint"
-                show={@show_endpoint_picker}
-                offset={@endpoint_picker_offset}
-                target={@myself}
-              />
+          </div>
+          <div>
+            <label class="label">Execution Endpoint (optional)</label>
+            <div class="flex gap-2 items-start">
+              <div class="flex-1">
+                <input
+                  type="text"
+                  value={@execution_endpoint}
+                  phx-blur="update_field"
+                  phx-value-field="execution_endpoint"
+                  phx-target={@myself}
+                  class="input input-bordered w-full"
+                  placeholder="http://localhost:8545"
+                />
+              </div>
+              <div :if={endpoint_picker_items(@saved_endpoints, :execution) != []} class="w-64 shrink-0">
+                <.picker
+                  items={endpoint_picker_items(@saved_endpoints, :execution)}
+                  label="Saved Endpoints"
+                  picker="execution_endpoint"
+                  pick_event="pick_execution_endpoint"
+                  show={@show_execution_endpoint_picker}
+                  offset={@execution_endpoint_picker_offset}
+                  target={@myself}
+                />
+              </div>
             </div>
-            <.link navigate={~p"/endpoints"} class="btn btn-ghost">
-              <.icon name="hero-cog-6-tooth" class="size-4" /> Manage
+          </div>
+          <div class="md:col-span-2 flex justify-end">
+            <.link navigate={~p"/endpoints"} class="btn btn-ghost btn-sm">
+              <.icon name="hero-cog-6-tooth" class="size-4" /> Manage Endpoints
             </.link>
           </div>
         </div>

@@ -64,8 +64,15 @@ defmodule EthercoasterWeb.ServiceLive.CardComponent do
         </div>
       </div>
 
-      <div class="text-sm mb-2">
-        <span class={endpoint_color(@endpoint_status)}>{@endpoint_url}</span>
+      <div class="text-sm mb-2 space-y-0.5">
+        <div>
+          <span class="opacity-50 text-xs">CL:</span>
+          <span class={endpoint_color(@endpoint_status)}>{@consensus_endpoint_url}</span>
+        </div>
+        <div :if={@execution_endpoint_url}>
+          <span class="opacity-50 text-xs">EL:</span>
+          <span class="opacity-80">{@execution_endpoint_url}</span>
+        </div>
       </div>
 
       <div class="text-sm opacity-70 mb-2">
