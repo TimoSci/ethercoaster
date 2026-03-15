@@ -103,3 +103,14 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* Progress map date labels scale with row height */
+.progress-date-label {
+  container-type: size;
+  overflow: hidden;
+}
+
+.progress-date-label span {
+  font-size: clamp(4px, 50cqb, 12px);
+  line-height: 1;
+}

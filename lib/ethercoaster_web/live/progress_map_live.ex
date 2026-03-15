@@ -258,8 +258,8 @@ defmodule EthercoasterWeb.ProgressMapLive do
 
         <%!-- Data rows --%>
         <%= for date <- @dates do %>
-          <div class="sticky left-0 z-[5] bg-base-200 text-xs font-mono p-1 whitespace-nowrap">
-            {format_date(date)}
+          <div class="sticky left-0 z-[5] bg-base-200 font-mono whitespace-nowrap progress-date-label">
+            <span>{format_date(date)}</span>
           </div>
           <%= for v <- @validators do %>
             <div
