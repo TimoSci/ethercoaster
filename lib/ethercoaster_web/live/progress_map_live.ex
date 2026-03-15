@@ -14,7 +14,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
     categories = ["attestation"]
     config = Application.get_env(:ethercoaster, __MODULE__, [])
     min_cell_width = Keyword.get(config, :min_cell_width, 24)
-    min_row_height = Keyword.get(config, :min_row_height, 4)
+    min_cell_height = Keyword.get(config, :min_cell_height, 4)
 
     today = Date.utc_today()
 
@@ -35,7 +35,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
       |> assign(:dates, build_dates_days(@default_days))
       |> assign(:scanning, false)
       |> assign(:min_cell_width, min_cell_width)
-      |> assign(:min_row_height, min_row_height)
+      |> assign(:min_cell_height, min_cell_height)
       |> assign(:full_width, true)
       |> assign(:saved_validators, Validators.list_validators())
       |> assign(:saved_groups, Validators.list_groups())
@@ -243,7 +243,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
       <div
         id="progress-grid"
         class="bg-base-content/10"
-        style={"display: grid; grid-template-columns: 80px repeat(#{length(@validators)}, minmax(#{@min_cell_width}px, 1fr)); grid-template-rows: 80px repeat(#{length(@dates)}, minmax(#{@min_row_height}px, 1fr)); gap: 1px; min-width: 100%; height: 100%;"}
+        style={"display: grid; grid-template-columns: 80px repeat(#{length(@validators)}, minmax(#{@min_cell_width}px, 1fr)); grid-template-rows: 80px repeat(#{length(@dates)}, minmax(#{@min_cell_height}px, 1fr)); gap: 1px; min-width: 100%; height: 100%;"}
       >
         <%!-- Header row --%>
         <div class="sticky top-0 z-10 bg-base-200" style="height: 80px;"></div>

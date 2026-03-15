@@ -75,7 +75,7 @@ config :ethercoaster, Ethercoaster.BeaconChain,
 # Progress Map
 config :ethercoaster, EthercoasterWeb.ProgressMapLive,
   min_cell_width: 4,
-  min_row_height: 4
+  min_cell_height: 4
 
 # Execution Chain JSON-RPC client
 config :ethercoaster, Ethercoaster.ExecutionChain,
