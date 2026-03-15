@@ -137,11 +137,11 @@ defmodule EthercoasterWeb.ProgressMapLive do
         />
       </div>
 
-      <div :if={@date_mode == :year} class="flex items-center gap-2">
-        <select phx-change="update_year" class="select select-bordered select-sm">
+      <form :if={@date_mode == :year} phx-change="update_year" class="flex items-center gap-2">
+        <select name="year" class="select select-bordered select-sm">
           <option :for={y <- year_options()} value={y} selected={y == @year}>{y}</option>
         </select>
-      </div>
+      </form>
     </div>
 
     <%!-- Validator Filter --%>
@@ -367,7 +367,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
     end
   end
 
-  def handle_event("update_year", %{"value" => val}, socket) do
+  def handle_event("update_year", %{"year" => val}, socket) do
     case Integer.parse(val) do
       {year, ""} ->
         dates = build_dates_year(year)
