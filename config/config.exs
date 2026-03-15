@@ -72,6 +72,10 @@ config :ethercoaster, Ethercoaster.BeaconChain,
     block_proposal: 500
   }
 
+# Progress Map
+config :ethercoaster, EthercoasterWeb.ProgressMapLive,
+  min_cell_width: 4
+
 # Execution Chain JSON-RPC client
 config :ethercoaster, Ethercoaster.ExecutionChain,
   base_url: "http://localhost:8545",

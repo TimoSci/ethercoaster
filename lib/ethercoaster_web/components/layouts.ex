@@ -47,7 +47,7 @@ defmodule EthercoasterWeb.Layouts do
     <.breadcrumbs path={@current_path} />
 
     <main class="px-4 py-4 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-5xl space-y-4">
+      <div class={["mx-auto space-y-4", !assigns[:full_width] && "max-w-5xl"]}>
         {@inner_content}
       </div>
     </main>

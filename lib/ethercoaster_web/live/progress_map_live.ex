@@ -4,21 +4,37 @@ defmodule EthercoasterWeb.ProgressMapLive do
   alias Ethercoaster.Validators
   alias Ethercoaster.ProgressMap
 
+  import EthercoasterWeb.PickerComponent
+
   @default_days 100
+  @picker_size EthercoasterWeb.PickerComponent.picker_size()
 
   @impl true
   def mount(_params, _session, socket) do
-    validators = Validators.list_validators_by_index()
     categories = ["attestation"]
+    config = Application.get_env(:ethercoaster, __MODULE__, [])
+    min_cell_width = Keyword.get(config, :min_cell_width, 24)
 
     socket =
       socket
-      |> assign(:validators, validators)
+      |> assign(:validators, [])
+      |> assign(:selected_validator_ids, [])
       |> assign(:categories, categories)
       |> assign(:days, @default_days)
       |> assign(:grid, nil)
       |> assign(:dates, build_dates(@default_days))
       |> assign(:scanning, false)
+      |> assign(:min_cell_width, min_cell_width)
+      |> assign(:full_width, true)
+      |> assign(:saved_validators, Validators.list_validators())
+      |> assign(:saved_groups, Validators.list_groups())
+      |> assign(:saved_supergroups, Validators.list_supergroups())
+      |> assign(:show_validator_picker, false)
+      |> assign(:validator_picker_offset, 0)
+      |> assign(:show_group_picker, false)
+      |> assign(:group_picker_offset, 0)
+      |> assign(:show_supergroup_picker, false)
+      |> assign(:supergroup_picker_offset, 0)
 
     {:ok, socket}
   end
@@ -65,6 +81,62 @@ defmodule EthercoasterWeb.ProgressMapLive do
       </div>
     </div>
 
+    <%!-- Validator Filter --%>
+    <div class="card bg-base-200 p-4 mb-4">
+      <div class="flex items-start gap-4">
+        <div class="flex-1">
+          <label class="label text-sm font-semibold">Validators</label>
+          <div :if={@validators != []} class="flex flex-wrap gap-1 mt-1">
+            <span :for={v <- @validators} class="badge badge-sm gap-1">
+              {validator_display(v)}
+              <button type="button" phx-click="remove_validator" phx-value-id={v.id} class="hover:text-error">
+                <.icon name="hero-x-mark" class="size-3" />
+              </button>
+            </span>
+            <button type="button" phx-click="clear_validators" class="btn btn-ghost btn-xs">
+              Clear all
+            </button>
+          </div>
+          <p :if={@validators == []} class="text-sm opacity-50 mt-1">
+            Select validators using the pickers
+          </p>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <div :if={@saved_validators != []} class="w-52">
+            <.picker
+              items={validator_picker_items(@saved_validators, @selected_validator_ids)}
+              label="Validators"
+              picker="validator"
+              pick_event="pick_validator"
+              show={@show_validator_picker}
+              offset={@validator_picker_offset}
+              empty_message="All validators selected."
+            />
+          </div>
+          <div :if={@saved_groups != []} class="w-52">
+            <.picker
+              items={group_picker_items(@saved_groups)}
+              label="Groups"
+              picker="group"
+              pick_event="pick_group"
+              show={@show_group_picker}
+              offset={@group_picker_offset}
+            />
+          </div>
+          <div :if={@saved_supergroups != []} class="w-52">
+            <.picker
+              items={supergroup_picker_items(@saved_supergroups)}
+              label="Supergroups"
+              picker="supergroup"
+              pick_event="pick_supergroup"
+              show={@show_supergroup_picker}
+              offset={@supergroup_picker_offset}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="flex gap-3 text-xs mb-2">
       <span class="flex items-center gap-1">
         <span class="inline-block w-3 h-3 rounded-sm bg-base-300 border border-base-content/10"></span> Not scanned
@@ -81,22 +153,22 @@ defmodule EthercoasterWeb.ProgressMapLive do
     </div>
 
     <div :if={@validators == []} class="text-center opacity-50 mt-12">
-      No validators in database. Add validators first.
+      Select validators, groups, or supergroups above to display the progress map.
     </div>
 
-    <div :if={@validators != []} class="overflow-auto border border-base-300 rounded-lg" style="max-height: calc(100vh - 220px);">
+    <div :if={@validators != []} class="overflow-auto border border-base-300 rounded-lg" style="max-height: calc(100vh - 320px);">
       <div
         id="progress-grid"
-        style={"display: grid; grid-template-columns: 60px repeat(#{length(@validators)}, 1fr); gap: 1px;"}
+        style={"display: grid; grid-template-columns: 60px repeat(#{length(@validators)}, minmax(#{@min_cell_width}px, 1fr)); gap: 1px; min-width: 100%;"}
       >
-        <%!-- Header row: validator indices --%>
+        <%!-- Header row: validator labels --%>
         <div class="sticky top-0 z-10 bg-base-200 text-xs font-mono p-1 text-center"></div>
         <div
           :for={v <- @validators}
           class="sticky top-0 z-10 bg-base-200 text-xs font-mono p-1 text-center truncate"
-          title={"Validator #{v.index}"}
+          title={validator_title(v)}
         >
-          {v.index}
+          {validator_column_label(v)}
         </div>
 
         <%!-- Grid rows: one per date --%>
@@ -107,7 +179,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
           <%= for v <- @validators do %>
             <div
               class={cell_class(@grid, v.id, date)}
-              title={"Validator #{v.index} — #{date}"}
+              title={"#{validator_display(v)} — #{date}"}
             >
             </div>
           <% end %>
@@ -117,7 +189,69 @@ defmodule EthercoasterWeb.ProgressMapLive do
     """
   end
 
+  # --- Picker Events ---
+
   @impl true
+  def handle_event("pick_validator", %{"item" => id_str}, socket) do
+    add_validator_ids(socket, [String.to_integer(id_str)])
+  end
+
+  def handle_event("pick_group", %{"item" => group_id}, socket) do
+    group = Enum.find(socket.assigns.saved_groups, &(Integer.to_string(&1.id) == group_id))
+
+    if group do
+      add_validator_ids(socket, Enum.map(group.validators, & &1.id))
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("pick_supergroup", %{"item" => sg_id}, socket) do
+    validators = Validators.supergroup_validators(String.to_integer(sg_id))
+    add_validator_ids(socket, Enum.map(validators, & &1.id))
+  end
+
+  def handle_event("remove_validator", %{"id" => id_str}, socket) do
+    id = String.to_integer(id_str)
+
+    socket =
+      socket
+      |> assign(:selected_validator_ids, Enum.reject(socket.assigns.selected_validator_ids, &(&1 == id)))
+      |> assign(:validators, Enum.reject(socket.assigns.validators, &(&1.id == id)))
+      |> assign(:grid, nil)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("clear_validators", _, socket) do
+    socket =
+      socket
+      |> assign(:selected_validator_ids, [])
+      |> assign(:validators, [])
+      |> assign(:grid, nil)
+
+    {:noreply, socket}
+  end
+
+  # --- Generic Picker Navigation ---
+
+  def handle_event("toggle_picker", %{"picker" => picker}, socket) do
+    key = String.to_existing_atom("show_#{picker}_picker")
+    {:noreply, assign(socket, key, !socket.assigns[key])}
+  end
+
+  def handle_event("picker_prev", %{"picker" => picker}, socket) do
+    key = String.to_existing_atom("#{picker}_picker_offset")
+    {:noreply, assign(socket, key, max(socket.assigns[key] - @picker_size, 0))}
+  end
+
+  def handle_event("picker_next", %{"picker" => picker}, socket) do
+    key = String.to_existing_atom("#{picker}_picker_offset")
+    {:noreply, assign(socket, key, socket.assigns[key] + @picker_size)}
+  end
+
+  # --- Category / Days / Refresh ---
+
   def handle_event("toggle_category", %{"category" => cat}, socket) do
     categories = socket.assigns.categories
 
@@ -158,7 +292,30 @@ defmodule EthercoasterWeb.ProgressMapLive do
     {:noreply, assign(socket, grid: grid, scanning: false)}
   end
 
-  # --- Helpers ---
+  # --- Private Helpers ---
+
+  defp add_validator_ids(socket, new_ids) do
+    existing = MapSet.new(socket.assigns.selected_validator_ids)
+    ids_to_add = Enum.reject(new_ids, &MapSet.member?(existing, &1))
+
+    if ids_to_add == [] do
+      {:noreply, socket}
+    else
+      all_ids = socket.assigns.selected_validator_ids ++ ids_to_add
+
+      new_validators =
+        socket.assigns.saved_validators
+        |> Enum.filter(&(&1.id in ids_to_add))
+
+      socket =
+        socket
+        |> assign(:selected_validator_ids, all_ids)
+        |> assign(:validators, socket.assigns.validators ++ new_validators)
+        |> assign(:grid, nil)
+
+      {:noreply, socket}
+    end
+  end
 
   defp build_dates(days) do
     today = Date.utc_today()
@@ -176,6 +333,48 @@ defmodule EthercoasterWeb.ProgressMapLive do
   defp format_category("attestation"), do: "Attestation"
   defp format_category("sync_committee"), do: "Sync Committee"
   defp format_category("block_proposal"), do: "Block Proposal"
+
+  defp validator_display(v) do
+    cond do
+      is_integer(v.index) -> Integer.to_string(v.index)
+      is_binary(v.public_key) and String.starts_with?(v.public_key, "0x") ->
+        String.slice(v.public_key, 0, 10) <> "…" <> String.slice(v.public_key, -6, 6)
+      is_binary(v.public_key) and v.public_key != "" -> v.public_key
+      true -> "?"
+    end
+  end
+
+  defp validator_column_label(v) do
+    if is_integer(v.index), do: Integer.to_string(v.index), else: validator_display(v)
+  end
+
+  defp validator_title(v) do
+    parts = []
+    parts = if is_integer(v.index), do: ["##{v.index}" | parts], else: parts
+    parts = if is_binary(v.public_key), do: [v.public_key | parts], else: parts
+    Enum.join(parts, " — ")
+  end
+
+  defp validator_picker_items(saved_validators, selected_ids) do
+    excluded = MapSet.new(selected_ids)
+
+    saved_validators
+    |> Enum.reject(&MapSet.member?(excluded, &1.id))
+    |> Enum.map(fn v -> {Integer.to_string(v.id), validator_display(v)} end)
+  end
+
+  defp group_picker_items(saved_groups) do
+    Enum.map(saved_groups, fn g ->
+      count = length(g.validators)
+      {Integer.to_string(g.id), "#{g.name} (#{count})"}
+    end)
+  end
+
+  defp supergroup_picker_items(saved_supergroups) do
+    Enum.map(saved_supergroups, fn sg ->
+      {Integer.to_string(sg.id), sg.name}
+    end)
+  end
 
   defp cell_class(nil, _vid, _date), do: "bg-base-300 min-h-[12px] border border-base-content/5"
 
