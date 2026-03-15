@@ -21,6 +21,9 @@ defmodule EthercoasterWeb.ProgressMapLive do
       socket
       |> assign(:validators, [])
       |> assign(:selected_validator_ids, [])
+      |> assign(:selected_individual, [])
+      |> assign(:selected_groups, [])
+      |> assign(:selected_supergroups, [])
       |> assign(:categories, categories)
       |> assign(:date_mode, :days)
       |> assign(:days, @default_days)
@@ -148,9 +151,24 @@ defmodule EthercoasterWeb.ProgressMapLive do
     <div class="card bg-base-200 p-4 mb-4">
       <div class="flex items-start gap-4">
         <div class="flex-1">
-          <label class="label text-sm font-semibold">Validators</label>
+          <label class="label text-sm font-semibold">
+            Validators
+            <span :if={@validators != []} class="font-normal opacity-70">({length(@validators)} total)</span>
+          </label>
           <div :if={@validators != []} class="flex flex-wrap gap-1 mt-1">
-            <span :for={v <- @validators} class="badge badge-sm gap-1">
+            <span :for={sg <- @selected_supergroups} class="badge badge-sm badge-primary gap-1">
+              {sg.name}
+              <button type="button" phx-click="remove_supergroup" phx-value-id={sg.id} class="hover:text-error">
+                <.icon name="hero-x-mark" class="size-3" />
+              </button>
+            </span>
+            <span :for={g <- @selected_groups} class="badge badge-sm badge-secondary gap-1">
+              {g.name}
+              <button type="button" phx-click="remove_group" phx-value-id={g.id} class="hover:text-error">
+                <.icon name="hero-x-mark" class="size-3" />
+              </button>
+            </span>
+            <span :for={v <- @selected_individual} class="badge badge-sm gap-1">
               {validator_display(v)}
               <button type="button" phx-click="remove_validator" phx-value-id={v.id} class="hover:text-error">
                 <.icon name="hero-x-mark" class="size-3" />
@@ -225,17 +243,18 @@ defmodule EthercoasterWeb.ProgressMapLive do
         class="bg-base-content/10"
         style={"display: grid; grid-template-columns: 80px repeat(#{length(@validators)}, minmax(#{@min_cell_width}px, 1fr)); gap: 1px; min-width: 100%;"}
       >
-        <%!-- Header row: validator labels --%>
-        <div class="sticky top-0 z-10 bg-base-200 text-xs font-mono p-1 text-center"></div>
+        <%!-- Header row --%>
+        <div class="sticky top-0 z-10 bg-base-200" style="height: 80px;"></div>
         <div
           :for={v <- @validators}
-          class="sticky top-0 z-10 bg-base-200 text-xs font-mono p-1 text-center truncate"
+          class="sticky top-0 z-10 bg-base-200 text-xs font-mono p-1 flex items-end justify-center"
+          style="height: 80px; writing-mode: vertical-rl;"
           title={validator_title(v)}
         >
           {validator_column_label(v)}
         </div>
 
-        <%!-- Grid rows: one per date --%>
+        <%!-- Data rows --%>
         <%= for date <- @dates do %>
           <div class="sticky left-0 z-[5] bg-base-200 text-xs font-mono p-1 whitespace-nowrap">
             {format_date(date)}
@@ -257,13 +276,30 @@ defmodule EthercoasterWeb.ProgressMapLive do
 
   @impl true
   def handle_event("pick_validator", %{"item" => id_str}, socket) do
-    add_validator_ids(socket, [String.to_integer(id_str)])
+    id = String.to_integer(id_str)
+    v = Enum.find(socket.assigns.saved_validators, &(&1.id == id))
+
+    socket =
+      if v && v.id not in socket.assigns.selected_validator_ids do
+        socket
+        |> assign(:selected_individual, socket.assigns.selected_individual ++ [v])
+      else
+        socket
+      end
+
+    add_validator_ids(socket, [id])
   end
 
   def handle_event("pick_group", %{"item" => group_id}, socket) do
     group = Enum.find(socket.assigns.saved_groups, &(Integer.to_string(&1.id) == group_id))
 
     if group do
+      already = Enum.any?(socket.assigns.selected_groups, &(&1.id == group.id))
+
+      socket =
+        if already, do: socket,
+        else: assign(socket, :selected_groups, socket.assigns.selected_groups ++ [group])
+
       add_validator_ids(socket, Enum.map(group.validators, & &1.id))
     else
       {:noreply, socket}
@@ -271,7 +307,17 @@ defmodule EthercoasterWeb.ProgressMapLive do
   end
 
   def handle_event("pick_supergroup", %{"item" => sg_id}, socket) do
-    validators = Validators.supergroup_validators(String.to_integer(sg_id))
+    sg_id = String.to_integer(sg_id)
+    sg = Enum.find(socket.assigns.saved_supergroups, &(&1.id == sg_id))
+    validators = Validators.supergroup_validators(sg_id)
+
+    socket =
+      if sg && !Enum.any?(socket.assigns.selected_supergroups, &(&1.id == sg_id)) do
+        assign(socket, :selected_supergroups, socket.assigns.selected_supergroups ++ [sg])
+      else
+        socket
+      end
+
     add_validator_ids(socket, Enum.map(validators, & &1.id))
   end
 
@@ -280,9 +326,30 @@ defmodule EthercoasterWeb.ProgressMapLive do
 
     socket =
       socket
-      |> assign(:selected_validator_ids, Enum.reject(socket.assigns.selected_validator_ids, &(&1 == id)))
-      |> assign(:validators, Enum.reject(socket.assigns.validators, &(&1.id == id)))
-      |> assign(:grid, nil)
+      |> assign(:selected_individual, Enum.reject(socket.assigns.selected_individual, &(&1.id == id)))
+      |> rebuild_validators()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("remove_group", %{"id" => id_str}, socket) do
+    id = String.to_integer(id_str)
+
+    socket =
+      socket
+      |> assign(:selected_groups, Enum.reject(socket.assigns.selected_groups, &(&1.id == id)))
+      |> rebuild_validators()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("remove_supergroup", %{"id" => id_str}, socket) do
+    id = String.to_integer(id_str)
+
+    socket =
+      socket
+      |> assign(:selected_supergroups, Enum.reject(socket.assigns.selected_supergroups, &(&1.id == id)))
+      |> rebuild_validators()
 
     {:noreply, socket}
   end
@@ -292,6 +359,9 @@ defmodule EthercoasterWeb.ProgressMapLive do
       socket
       |> assign(:selected_validator_ids, [])
       |> assign(:validators, [])
+      |> assign(:selected_individual, [])
+      |> assign(:selected_groups, [])
+      |> assign(:selected_supergroups, [])
       |> assign(:grid, nil)
 
     {:noreply, socket}
@@ -418,6 +488,27 @@ defmodule EthercoasterWeb.ProgressMapLive do
 
       {:noreply, socket}
     end
+  end
+
+  defp rebuild_validators(socket) do
+    a = socket.assigns
+
+    group_validators =
+      Enum.flat_map(a.selected_groups, & &1.validators)
+
+    supergroup_validators =
+      Enum.flat_map(a.selected_supergroups, fn sg ->
+        Validators.supergroup_validators(sg.id)
+      end)
+
+    all =
+      (a.selected_individual ++ group_validators ++ supergroup_validators)
+      |> Enum.uniq_by(& &1.id)
+
+    socket
+    |> assign(:validators, all)
+    |> assign(:selected_validator_ids, Enum.map(all, & &1.id))
+    |> assign(:grid, nil)
   end
 
   defp rebuild_dates(:days, assigns), do: build_dates_days(assigns.days)
