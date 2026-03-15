@@ -15,14 +15,20 @@ defmodule EthercoasterWeb.ProgressMapLive do
     config = Application.get_env(:ethercoaster, __MODULE__, [])
     min_cell_width = Keyword.get(config, :min_cell_width, 24)
 
+    today = Date.utc_today()
+
     socket =
       socket
       |> assign(:validators, [])
       |> assign(:selected_validator_ids, [])
       |> assign(:categories, categories)
+      |> assign(:date_mode, :days)
       |> assign(:days, @default_days)
+      |> assign(:range_from, Date.to_iso8601(Date.add(today, -30)))
+      |> assign(:range_to, Date.to_iso8601(today))
+      |> assign(:year, today.year)
       |> assign(:grid, nil)
-      |> assign(:dates, build_dates(@default_days))
+      |> assign(:dates, build_dates_days(@default_days))
       |> assign(:scanning, false)
       |> assign(:min_cell_width, min_cell_width)
       |> assign(:full_width, true)
@@ -46,38 +52,95 @@ defmodule EthercoasterWeb.ProgressMapLive do
       <div>
         <h2 class="text-xl font-bold">Progress Map</h2>
         <p class="text-sm opacity-70">
-          {length(@validators)} validators &times; {@days} days
+          {length(@validators)} validators &times; {length(@dates)} days
         </p>
       </div>
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-medium">Category:</span>
-          <label :for={cat <- ["attestation", "sync_committee", "block_proposal"]} class="label cursor-pointer gap-1">
-            <input
-              type="checkbox"
-              checked={cat in @categories}
-              phx-click="toggle_category"
-              phx-value-category={cat}
-              class="checkbox checkbox-sm checkbox-primary"
-            />
-            <span class="text-sm">{format_category(cat)}</span>
-          </label>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-medium">Days:</span>
-          <input
-            type="number"
-            value={@days}
-            phx-blur="update_days"
-            phx-value-field="days"
-            class="input input-bordered input-sm w-20"
-            min="1"
-            max="1000"
-          />
-        </div>
+      <div class="flex items-center gap-2">
         <button phx-click="refresh_map" class="btn btn-primary btn-sm" disabled={@scanning || @validators == []}>
           {if @scanning, do: "Scanning…", else: "Refresh Map"}
         </button>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-end gap-4 mb-4">
+      <%!-- Category checkboxes --%>
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-medium">Category:</span>
+        <label :for={cat <- ["attestation", "sync_committee", "block_proposal"]} class="label cursor-pointer gap-1">
+          <input
+            type="checkbox"
+            checked={cat in @categories}
+            phx-click="toggle_category"
+            phx-value-category={cat}
+            class="checkbox checkbox-sm checkbox-primary"
+          />
+          <span class="text-sm">{format_category(cat)}</span>
+        </label>
+      </div>
+
+      <div class="border-l border-base-300 h-8"></div>
+
+      <%!-- Date mode selector --%>
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-medium">Date range:</span>
+        <div class="join">
+          <button
+            phx-click="set_date_mode"
+            phx-value-mode="days"
+            class={"join-item btn btn-sm #{if @date_mode == :days, do: "btn-active", else: ""}"}
+          >
+            Last N days
+          </button>
+          <button
+            phx-click="set_date_mode"
+            phx-value-mode="range"
+            class={"join-item btn btn-sm #{if @date_mode == :range, do: "btn-active", else: ""}"}
+          >
+            Range
+          </button>
+          <button
+            phx-click="set_date_mode"
+            phx-value-mode="year"
+            class={"join-item btn btn-sm #{if @date_mode == :year, do: "btn-active", else: ""}"}
+          >
+            Year
+          </button>
+        </div>
+      </div>
+
+      <%!-- Mode-specific inputs --%>
+      <div :if={@date_mode == :days} class="flex items-center gap-2">
+        <input
+          type="number"
+          value={@days}
+          phx-blur="update_days"
+          class="input input-bordered input-sm w-20"
+          min="1"
+          max="1000"
+        />
+        <span class="text-sm opacity-70">days</span>
+      </div>
+
+      <div :if={@date_mode == :range} class="flex items-center gap-2">
+        <input
+          type="date"
+          value={@range_from}
+          phx-blur="update_range_from"
+          class="input input-bordered input-sm"
+        />
+        <span class="text-sm opacity-70">to</span>
+        <input
+          type="date"
+          value={@range_to}
+          phx-blur="update_range_to"
+          class="input input-bordered input-sm"
+        />
+      </div>
+
+      <div :if={@date_mode == :year} class="flex items-center gap-2">
+        <select phx-change="update_year" class="select select-bordered select-sm">
+          <option :for={y <- year_options()} value={y} selected={y == @year}>{y}</option>
+        </select>
       </div>
     </div>
 
@@ -159,7 +222,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
     <div :if={@validators != []} class="overflow-auto border border-base-300 rounded-lg" style="max-height: calc(100vh - 320px);">
       <div
         id="progress-grid"
-        style={"display: grid; grid-template-columns: 60px repeat(#{length(@validators)}, minmax(#{@min_cell_width}px, 1fr)); gap: 1px; min-width: 100%;"}
+        style={"display: grid; grid-template-columns: 80px repeat(#{length(@validators)}, minmax(#{@min_cell_width}px, 1fr)); gap: 1px; min-width: 100%;"}
       >
         <%!-- Header row: validator labels --%>
         <div class="sticky top-0 z-10 bg-base-200 text-xs font-mono p-1 text-center"></div>
@@ -265,11 +328,50 @@ defmodule EthercoasterWeb.ProgressMapLive do
     {:noreply, assign(socket, categories: categories, grid: nil)}
   end
 
+  def handle_event("set_date_mode", %{"mode" => mode}, socket) do
+    mode = String.to_existing_atom(mode)
+    dates = rebuild_dates(mode, socket.assigns)
+    {:noreply, assign(socket, date_mode: mode, dates: dates, grid: nil)}
+  end
+
   def handle_event("update_days", %{"value" => val}, socket) do
     case Integer.parse(val) do
       {days, ""} when days > 0 ->
         days = min(days, 1000)
-        {:noreply, assign(socket, days: days, dates: build_dates(days), grid: nil)}
+        {:noreply, assign(socket, days: days, dates: build_dates_days(days), grid: nil)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("update_range_from", %{"value" => val}, socket) do
+    case Date.from_iso8601(val) do
+      {:ok, _} ->
+        dates = build_dates_range(val, socket.assigns.range_to)
+        {:noreply, assign(socket, range_from: val, dates: dates, grid: nil)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("update_range_to", %{"value" => val}, socket) do
+    case Date.from_iso8601(val) do
+      {:ok, _} ->
+        dates = build_dates_range(socket.assigns.range_from, val)
+        {:noreply, assign(socket, range_to: val, dates: dates, grid: nil)}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("update_year", %{"value" => val}, socket) do
+    case Integer.parse(val) do
+      {year, ""} ->
+        dates = build_dates_year(year)
+        {:noreply, assign(socket, year: year, dates: dates, grid: nil)}
 
       _ ->
         {:noreply, socket}
@@ -317,7 +419,11 @@ defmodule EthercoasterWeb.ProgressMapLive do
     end
   end
 
-  defp build_dates(days) do
+  defp rebuild_dates(:days, assigns), do: build_dates_days(assigns.days)
+  defp rebuild_dates(:range, assigns), do: build_dates_range(assigns.range_from, assigns.range_to)
+  defp rebuild_dates(:year, assigns), do: build_dates_year(assigns.year)
+
+  defp build_dates_days(days) do
     today = Date.utc_today()
 
     (days - 1)..0//-1
@@ -325,10 +431,35 @@ defmodule EthercoasterWeb.ProgressMapLive do
     |> Enum.map(&Date.to_iso8601/1)
   end
 
-  defp format_date(date_str) do
-    {:ok, date} = Date.from_iso8601(date_str)
-    Calendar.strftime(date, "%m/%d")
+  defp build_dates_range(from_str, to_str) do
+    with {:ok, from} <- Date.from_iso8601(from_str),
+         {:ok, to} <- Date.from_iso8601(to_str),
+         true <- Date.compare(from, to) != :gt do
+      Date.range(from, to) |> Enum.map(&Date.to_iso8601/1)
+    else
+      _ -> []
+    end
   end
+
+  defp build_dates_year(year) do
+    from = Date.new!(year, 1, 1)
+    year_end = Date.new!(year, 12, 31)
+    today = Date.utc_today()
+    to = if Date.compare(year_end, today) == :gt, do: today, else: year_end
+
+    if Date.compare(from, to) != :gt do
+      Date.range(from, to) |> Enum.map(&Date.to_iso8601/1)
+    else
+      []
+    end
+  end
+
+  defp year_options do
+    current_year = Date.utc_today().year
+    Enum.to_list(current_year..2020//-1)
+  end
+
+  defp format_date(date_str), do: date_str
 
   defp format_category("attestation"), do: "Attestation"
   defp format_category("sync_committee"), do: "Sync Committee"
