@@ -202,16 +202,16 @@ defmodule EthercoasterWeb.ProgressMapLive do
 
     <div class="flex gap-3 text-xs mb-2">
       <span class="flex items-center gap-1">
-        <span class="inline-block w-3 h-3 rounded-sm bg-base-300 border border-base-content/10"></span> Not scanned
+        <span class="inline-block w-3 h-3 rounded-sm bg-base-300"></span> Not scanned
       </span>
       <span class="flex items-center gap-1">
-        <span class="inline-block w-3 h-3 rounded-sm bg-success border border-success/30"></span> Complete
+        <span class="inline-block w-3 h-3 rounded-sm bg-success"></span> Complete
       </span>
       <span class="flex items-center gap-1">
-        <span class="inline-block w-3 h-3 rounded-sm bg-warning/40 border border-warning/30"></span> Partial
+        <span class="inline-block w-3 h-3 rounded-sm bg-warning/40"></span> Partial
       </span>
       <span class="flex items-center gap-1">
-        <span class="inline-block w-3 h-3 rounded-sm bg-base-300/50 border border-base-content/5"></span> No data
+        <span class="inline-block w-3 h-3 rounded-sm bg-base-300/50"></span> No data
       </span>
     </div>
 
@@ -222,6 +222,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
     <div :if={@validators != []} class="overflow-auto border border-base-300 rounded-lg" style="max-height: calc(100vh - 320px);">
       <div
         id="progress-grid"
+        class="bg-base-content/10"
         style={"display: grid; grid-template-columns: 80px repeat(#{length(@validators)}, minmax(#{@min_cell_width}px, 1fr)); gap: 1px; min-width: 100%;"}
       >
         <%!-- Header row: validator labels --%>
@@ -507,15 +508,15 @@ defmodule EthercoasterWeb.ProgressMapLive do
     end)
   end
 
-  defp cell_class(nil, _vid, _date), do: "bg-base-300 min-h-[12px] border border-base-content/5"
+  defp cell_class(nil, _vid, _date), do: "bg-base-300 min-h-[12px]"
 
   defp cell_class(grid, vid, date) do
-    base = "min-h-[12px] border"
+    base = "min-h-[12px]"
 
     case get_in(grid, [vid, date]) do
-      :full -> "#{base} bg-success border-success/30"
-      :partial -> "#{base} bg-warning/40 border-warning/30"
-      _ -> "#{base} bg-base-300/50 border-base-content/5"
+      :full -> "#{base} bg-success"
+      :partial -> "#{base} bg-warning/40"
+      _ -> "#{base} bg-base-300/50"
     end
   end
 end
