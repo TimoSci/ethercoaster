@@ -377,6 +377,18 @@ defmodule Ethercoaster.Service.Worker do
     end
   end
 
+  defp fetch_and_store(validator, epochs, :sync_committee, genesis_time) do
+    try do
+      {:ok, data} = Rewards.fetch_sync_rewards(epochs, validator.index)
+      Cache.store_and_mark(:sync_committee, validator.id, data, epochs, genesis_time)
+      :ok
+    rescue
+      e ->
+        Logger.error("Service worker sync committee fetch failed: #{inspect(e)}")
+        :error
+    end
+  end
+
   defp fetch_and_store(_validator, _epochs, _category, _genesis_time) do
     # Future categories — no-op for now
     :ok

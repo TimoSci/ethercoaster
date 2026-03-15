@@ -406,7 +406,7 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
 
         <div>
           <label class="label">
-            Transaction Categories
+            Transaction Classes
             <.link navigate={~p"/transaction_types"} class="ml-1 opacity-60 hover:opacity-100">
               <.icon name="hero-information-circle" class="size-4" />
             </.link>
@@ -422,9 +422,15 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
               />
               <span>Attestation</span>
             </label>
-            <label class="label cursor-pointer gap-2 opacity-50">
-              <input type="checkbox" disabled class="checkbox" />
-              <span>Sync Committee <span class="badge badge-sm">coming soon</span></span>
+            <label class="label cursor-pointer gap-2">
+              <input
+                type="checkbox"
+                name="categories[]"
+                value="sync_committee"
+                checked={Enum.member?(@categories, "sync_committee")}
+                class="checkbox checkbox-primary"
+              />
+              <span>Sync Committee</span>
             </label>
             <label class="label cursor-pointer gap-2">
               <input
@@ -449,6 +455,10 @@ defmodule EthercoasterWeb.ServiceLive.FormComponent do
             <label class="label cursor-pointer gap-2 opacity-50">
               <input type="checkbox" disabled class="checkbox" />
               <span>Slashing <span class="badge badge-sm">coming soon</span></span>
+            </label>
+            <label class="label cursor-pointer gap-2 opacity-50">
+              <input type="checkbox" disabled class="checkbox" />
+              <span>MEV Reward <span class="badge badge-sm">coming soon</span></span>
             </label>
             <label class="label cursor-pointer gap-2 opacity-50">
               <input type="checkbox" disabled class="checkbox" />

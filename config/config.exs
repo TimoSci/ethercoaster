@@ -69,7 +69,8 @@ config :ethercoaster, Ethercoaster.BeaconChain,
   max_concurrency: 48,
   batch_size: 50,
   batch_sizes: %{
-    block_proposal: 500
+    block_proposal: 500,
+    sync_committee: 8
   }
 
 # Progress Map
