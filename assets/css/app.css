@@ -108,9 +108,12 @@
 .progress-date-label {
   container-type: size;
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
 }
 
 .progress-date-label span {
-  font-size: clamp(4px, 50cqb, 12px);
+  font-size: clamp(6px, 50cqb, 12px);
   line-height: 1;
 }
