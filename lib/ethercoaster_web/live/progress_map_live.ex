@@ -258,12 +258,12 @@ defmodule EthercoasterWeb.ProgressMapLive do
 
         <%!-- Data rows --%>
         <%= for date <- @dates do %>
-          <div class="sticky left-0 z-[5] bg-base-200 font-mono whitespace-nowrap progress-date-label">
+          <div class={["sticky left-0 z-[5] bg-base-200 font-mono whitespace-nowrap progress-date-label", sunday?(date) && "brightness-150"]}>
             <span>{format_date(date)}</span>
           </div>
           <%= for v <- @validators do %>
             <div
-              class={cell_class(@grid, v.id, date)}
+              class={[cell_class(@grid, v.id, date), sunday?(date) && "brightness-150"]}
               title={"#{validator_display(v)} — #{date}"}
             >
             </div>
@@ -551,6 +551,10 @@ defmodule EthercoasterWeb.ProgressMapLive do
   defp year_options do
     current_year = Date.utc_today().year
     Enum.to_list(current_year..2020//-1)
+  end
+
+  defp sunday?(date_str) do
+    date_str |> Date.from_iso8601!() |> Date.day_of_week() == 7
   end
 
   defp format_date(date_str), do: date_str
