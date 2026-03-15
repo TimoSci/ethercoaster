@@ -82,6 +82,7 @@ defmodule EthercoasterWeb.ServiceLive do
       |> assign(:progress_map_days, @progress_map_days)
       |> assign(:progress_map_dates, progress_map_dates)
       |> assign(:progress_map_grid, progress_map_grid)
+      |> assign(:create_form_open, false)
 
     {:ok, socket}
   end
@@ -170,9 +171,9 @@ defmodule EthercoasterWeb.ServiceLive do
     </a>
 
     <div class="mt-4 space-y-6">
-      <div class="collapse collapse-arrow bg-base-200">
-        <input type="checkbox" />
-        <div class="collapse-title text-lg font-semibold">Create Service</div>
+      <div class={["collapse collapse-arrow bg-base-200", @create_form_open && "collapse-open"]}>
+        <input type="checkbox" class="hidden" checked={@create_form_open} />
+        <div class="collapse-title text-lg font-semibold cursor-pointer" phx-click="toggle_create_form">Create Service</div>
         <div class="collapse-content">
           <.live_component module={EthercoasterWeb.ServiceLive.FormComponent} id="service-form" form_error={@form_error} saved_endpoints={@saved_endpoints} saved_validators={@saved_validators} saved_groups={@saved_groups} />
         </div>
@@ -295,6 +296,10 @@ defmodule EthercoasterWeb.ServiceLive do
   # --- User actions ---
 
   @impl true
+  def handle_event("toggle_create_form", _params, socket) do
+    {:noreply, assign(socket, :create_form_open, !socket.assigns.create_form_open)}
+  end
+
   def handle_event("play_service", %{"id" => id}, socket) do
     service_id = String.to_integer(id)
 
