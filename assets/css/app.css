@@ -106,6 +106,7 @@
 
 /* Progress map date labels scale with row height */
 .progress-date-label {
+  --min-label-row-height: 10px;
   container-type: size;
   overflow: hidden;
   display: flex;
@@ -116,4 +117,14 @@
 .progress-date-label span {
   font-size: clamp(6px, 50cqb, 12px);
   line-height: 1;
+}
+
+.progress-date-label.weekday span {
+  display: none;
+}
+
+@container (min-height: 10px) {
+  .progress-date-label.weekday span {
+    display: inline;
+  }
 }

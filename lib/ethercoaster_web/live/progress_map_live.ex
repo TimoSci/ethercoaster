@@ -258,7 +258,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
 
         <%!-- Data rows --%>
         <%= for date <- @dates do %>
-          <div class={["sticky left-0 z-[5] bg-base-200 font-mono whitespace-nowrap progress-date-label", sunday?(date) && "brightness-150"]}>
+          <div class={["sticky left-0 z-[5] bg-base-200 font-mono whitespace-nowrap progress-date-label", if(sunday?(date), do: "brightness-150", else: "weekday")]}>
             <span>{format_date(date)}</span>
           </div>
           <%= for v <- @validators do %>
