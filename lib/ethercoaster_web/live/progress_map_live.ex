@@ -14,6 +14,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
     categories = ["attestation"]
     config = Application.get_env(:ethercoaster, __MODULE__, [])
     min_cell_width = Keyword.get(config, :min_cell_width, 24)
+    min_row_height = Keyword.get(config, :min_row_height, 4)
 
     today = Date.utc_today()
 
@@ -34,6 +35,7 @@ defmodule EthercoasterWeb.ProgressMapLive do
       |> assign(:dates, build_dates_days(@default_days))
       |> assign(:scanning, false)
       |> assign(:min_cell_width, min_cell_width)
+      |> assign(:min_row_height, min_row_height)
       |> assign(:full_width, true)
       |> assign(:saved_validators, Validators.list_validators())
       |> assign(:saved_groups, Validators.list_groups())
@@ -237,11 +239,11 @@ defmodule EthercoasterWeb.ProgressMapLive do
       Select validators, groups, or supergroups above to display the progress map.
     </div>
 
-    <div :if={@validators != []} class="overflow-auto border border-base-300 rounded-lg" style="max-height: calc(100vh - 320px);">
+    <div :if={@validators != []} class="overflow-auto border border-base-300 rounded-lg" style="height: calc(100vh - 320px);">
       <div
         id="progress-grid"
         class="bg-base-content/10"
-        style={"display: grid; grid-template-columns: 80px repeat(#{length(@validators)}, minmax(#{@min_cell_width}px, 1fr)); gap: 1px; min-width: 100%;"}
+        style={"display: grid; grid-template-columns: 80px repeat(#{length(@validators)}, minmax(#{@min_cell_width}px, 1fr)); grid-template-rows: 80px repeat(#{length(@dates)}, minmax(#{@min_row_height}px, 1fr)); gap: 1px; min-width: 100%; height: 100%;"}
       >
         <%!-- Header row --%>
         <div class="sticky top-0 z-10 bg-base-200" style="height: 80px;"></div>
@@ -599,15 +601,13 @@ defmodule EthercoasterWeb.ProgressMapLive do
     end)
   end
 
-  defp cell_class(nil, _vid, _date), do: "bg-base-300 min-h-[12px]"
+  defp cell_class(nil, _vid, _date), do: "bg-base-300"
 
   defp cell_class(grid, vid, date) do
-    base = "min-h-[12px]"
-
     case get_in(grid, [vid, date]) do
-      :full -> "#{base} bg-success"
-      :partial -> "#{base} bg-warning/40"
-      _ -> "#{base} bg-base-300/50"
+      :full -> "bg-success"
+      :partial -> "bg-warning/40"
+      _ -> "bg-base-300/50"
     end
   end
 end
